@@ -210,7 +210,7 @@ export default class Intro extends Component<Props, State> {
             )}
             <a
               class={style.navLink}
-              href="https://github.com/nazeefmasood/squoosh-dev"
+              href="https://github.com/nazeefmasood/smoosh-dev"
               target="_blank"
               rel="noreferrer noopener"
             >
@@ -435,13 +435,13 @@ export default class Intro extends Component<Props, State> {
                 <h4>Resources</h4>
                 <a
                   class={style.footerLink}
-                  href="https://github.com/nazeefmasood/squoosh-dev/blob/main/README.md"
+                  href="https://github.com/nazeefmasood/smoosh-dev/blob/main/README.md"
                 >
                   Privacy
                 </a>
                 <a
                   class={style.footerLink}
-                  href="https://github.com/nazeefmasood/squoosh-dev"
+                  href="https://github.com/nazeefmasood/smoosh-dev"
                 >
                   GitHub
                 </a>
