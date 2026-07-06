@@ -15,8 +15,7 @@ import { h, FunctionalComponent } from 'preact';
 import baseCss from 'css:./base.css';
 import initialCss from 'initial-css:';
 import { allSrc } from 'client-bundle:client/initial-app';
-import favicon from 'url:static-build/assets/favicon.ico';
-import ogImage from 'url:static-build/assets/icon-large-maskable.png';
+import smooshIcon from 'url:static-build/assets/brand/smoosh-icon.png';
 import { escapeStyleScriptContent, siteOrigin } from 'static-build/utils';
 import Intro from 'shared/prerendered-app/Intro';
 import snackbarCss from 'css:../../../shared/custom-els/snack-bar/styles.css';
@@ -27,30 +26,30 @@ interface Props {}
 const Index: FunctionalComponent<Props> = () => (
   <html lang="en">
     <head>
-      <title>Squoosh</title>
+      <title>Smoosh — Compress & convert images in your browser</title>
       <meta
         name="description"
-        content="Squoosh is the ultimate image optimizer that allows you to compress and compare images with different codecs in your browser."
+        content="Smoosh is a private, in-browser image optimizer. Compress and compare images with modern codecs like AVIF, WebP and JXL — your files never leave your device."
       />
       <meta name="twitter:card" content="summary" />
-      <meta name="twitter:site" content="@SquooshApp" />
-      <meta property="og:title" content="Squoosh" />
+      <meta name="twitter:site" content="@smooshapp" />
+      <meta property="og:title" content="Smoosh" />
       <meta property="og:type" content="website" />
-      <meta property="og:image" content={`${siteOrigin}${ogImage}`} />
+      <meta property="og:image" content={`${siteOrigin}${smooshIcon}`} />
       <meta
         property="og:image:secure_url"
-        content={`${siteOrigin}${ogImage}`}
+        content={`${siteOrigin}${smooshIcon}`}
       />
       <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="500" />
       <meta property="og:image:height" content="500" />
       <meta
         property="og:image:alt"
-        content="A cartoon of a hand squeezing an image file on a dark background."
+        content="Smoosh logo — a colorful gradient S mark for the image tool."
       />
       <meta
         name="og:description"
-        content="Squoosh is the ultimate image optimizer that allows you to compress and compare images with different codecs in your browser."
+        content="Smoosh is a private, in-browser image optimizer. Compress and compare images with modern codecs — your files never leave your device."
       />
       <meta
         name="viewport"
@@ -58,9 +57,9 @@ const Index: FunctionalComponent<Props> = () => (
       />
       <meta name="mobile-web-app-capable" content="yes" />
       <meta name="apple-mobile-web-app-capable" content="yes" />
-      <link rel="shortcut icon" href={favicon} />
-      <link rel="apple-touch-icon" href={ogImage} />
-      <meta name="theme-color" content="#ff3385" />
+      <link rel="shortcut icon" href={smooshIcon} />
+      <link rel="apple-touch-icon" href={smooshIcon} />
+      <meta name="theme-color" content="#1a365d" />
       <link rel="manifest" href="/manifest.json" />
       <link rel="canonical" href={siteOrigin} />
       <style

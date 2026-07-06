@@ -54,6 +54,16 @@ declare module 'service-worker:*' {
   export default url;
 }
 
+declare module '@pilio/gemini-watermark-remover/browser' {
+  export interface WatermarkMeta {
+    detected?: boolean;
+  }
+  export function removeWatermarkFromImage(
+    image: any,
+    options?: any,
+  ): Promise<{ canvas: any; meta: WatermarkMeta | null }>;
+}
+
 declare var ga: {
   (...args: any[]): void;
   q: any[];

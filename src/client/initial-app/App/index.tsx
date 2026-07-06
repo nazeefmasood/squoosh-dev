@@ -13,8 +13,14 @@ import Intro from 'shared/prerendered-app/Intro';
 import 'shared/custom-els/loading-spinner';
 
 const ROUTE_EDITOR = '/editor';
+const ROUTE_BATCH = '/batch';
+const ROUTE_WATERMARK = '/watermark';
+
+type Tool = 'compress' | 'watermark';
 
 const compressPromise = import('client/lazy-app/Compress');
+const batchPromise = import('client/lazy-app/Batch');
+const watermarkPromise = import('client/lazy-app/Watermark');
 const swBridgePromise = import('client/lazy-app/sw-bridge');
 
 function back() {
@@ -25,9 +31,15 @@ interface Props {}
 
 interface State {
   awaitingShareTarget: boolean;
+  activeTool: Tool;
   file?: File;
+  files?: File[];
   isEditorOpen: Boolean;
+  isBatchOpen: Boolean;
+  isWatermarkOpen: Boolean;
   Compress?: typeof import('client/lazy-app/Compress').default;
+  Batch?: typeof import('client/lazy-app/Batch').default;
+  Watermark?: typeof import('client/lazy-app/Watermark').default;
 }
 
 export default class App extends Component<Props, State> {
@@ -35,9 +47,15 @@ export default class App extends Component<Props, State> {
     awaitingShareTarget: new URL(location.href).searchParams.has(
       'share-target',
     ),
+    activeTool: 'compress',
     isEditorOpen: false,
+    isBatchOpen: false,
+    isWatermarkOpen: false,
     file: undefined,
+    files: undefined,
     Compress: undefined,
+    Batch: undefined,
+    Watermark: undefined,
   };
 
   snackbar?: SnackBarElement;
@@ -51,6 +69,22 @@ export default class App extends Component<Props, State> {
       })
       .catch(() => {
         this.showSnack('Failed to load app');
+      });
+
+    batchPromise
+      .then((module) => {
+        this.setState({ Batch: module.default });
+      })
+      .catch(() => {
+        this.showSnack('Failed to load batch tool');
+      });
+
+    watermarkPromise
+      .then((module) => {
+        this.setState({ Watermark: module.default });
+      })
+      .catch(() => {
+        this.showSnack('Failed to load watermark tool');
       });
 
     swBridgePromise.then(async ({ offliner, getSharedImage }) => {
@@ -76,14 +110,32 @@ export default class App extends Component<Props, State> {
 
   private onFileDrop = ({ files }: FileDropEvent) => {
     if (!files || files.length === 0) return;
-    const file = files[0];
-    this.openEditor();
-    this.setState({ file });
+    this.handleFiles(Array.from(files));
+  };
+
+  private handleFiles = (files: File[]) => {
+    if (files.length === 0) return;
+    if (this.state.activeTool === 'watermark') {
+      this.openWatermark();
+      this.setState({ files, file: undefined });
+      return;
+    }
+    if (files.length === 1) {
+      this.openEditor();
+      this.setState({ file: files[0], files: undefined });
+    } else {
+      this.openBatch();
+      this.setState({ files, file: undefined });
+    }
   };
 
   private onIntroPickFile = (file: File) => {
     this.openEditor();
     this.setState({ file });
+  };
+
+  private setActiveTool = (tool: Tool) => {
+    this.setState({ activeTool: tool });
   };
 
   private showSnack = (
@@ -95,7 +147,11 @@ export default class App extends Component<Props, State> {
   };
 
   private onPopState = () => {
-    this.setState({ isEditorOpen: location.pathname === ROUTE_EDITOR });
+    this.setState({
+      isEditorOpen: location.pathname === ROUTE_EDITOR,
+      isBatchOpen: location.pathname === ROUTE_BATCH,
+      isWatermarkOpen: location.pathname === ROUTE_WATERMARK,
+    });
   };
 
   private openEditor = () => {
@@ -104,26 +160,93 @@ export default class App extends Component<Props, State> {
     const editorURL = new URL(location.href);
     editorURL.pathname = ROUTE_EDITOR;
     history.pushState(null, '', editorURL.href);
-    this.setState({ isEditorOpen: true });
+    this.setState({
+      isEditorOpen: true,
+      isBatchOpen: false,
+      isWatermarkOpen: false,
+    });
+  };
+
+  private openBatch = () => {
+    if (this.state.isBatchOpen) return;
+    const batchURL = new URL(location.href);
+    batchURL.pathname = ROUTE_BATCH;
+    history.pushState(null, '', batchURL.href);
+    this.setState({
+      isBatchOpen: true,
+      isEditorOpen: false,
+      isWatermarkOpen: false,
+    });
+  };
+
+  private openWatermark = () => {
+    if (this.state.isWatermarkOpen) return;
+    const wmURL = new URL(location.href);
+    wmURL.pathname = ROUTE_WATERMARK;
+    history.pushState(null, '', wmURL.href);
+    this.setState({
+      isWatermarkOpen: true,
+      isEditorOpen: false,
+      isBatchOpen: false,
+    });
   };
 
   render(
     {}: Props,
-    { file, isEditorOpen, Compress, awaitingShareTarget }: State,
+    {
+      activeTool,
+      file,
+      files,
+      isEditorOpen,
+      isBatchOpen,
+      isWatermarkOpen,
+      Compress,
+      Batch,
+      Watermark,
+      awaitingShareTarget,
+    }: State,
   ) {
-    const showSpinner = awaitingShareTarget || (isEditorOpen && !Compress);
+    const showSpinner =
+      awaitingShareTarget ||
+      (isEditorOpen && !Compress) ||
+      (isBatchOpen && !Batch) ||
+      (isWatermarkOpen && !Watermark);
 
     return (
       <div class={style.app}>
         <file-drop onfiledrop={this.onFileDrop} class={style.drop}>
           {showSpinner ? (
             <loading-spinner class={style.appLoader} />
+          ) : isBatchOpen && files && files.length > 0 ? (
+            Batch && (
+              <Batch
+                files={files}
+                showSnack={this.showSnack}
+                onBack={back}
+                onAddFiles={this.handleFiles}
+              />
+            )
+          ) : isWatermarkOpen && files && files.length > 0 ? (
+            Watermark && (
+              <Watermark
+                files={files}
+                showSnack={this.showSnack}
+                onBack={back}
+                onAddFiles={this.handleFiles}
+              />
+            )
           ) : isEditorOpen ? (
             Compress && (
               <Compress file={file!} showSnack={this.showSnack} onBack={back} />
             )
           ) : (
-            <Intro onFile={this.onIntroPickFile} showSnack={this.showSnack} />
+            <Intro
+              tool={activeTool}
+              onToolChange={this.setActiveTool}
+              onFile={this.onIntroPickFile}
+              onFiles={this.handleFiles}
+              showSnack={this.showSnack}
+            />
           )}
           <snack-bar ref={linkRef(this, 'snackbar')} />
         </file-drop>
