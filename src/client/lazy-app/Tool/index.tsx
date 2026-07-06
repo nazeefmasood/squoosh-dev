@@ -76,6 +76,32 @@ function encoderHasQuality(type: EncoderType): boolean {
   return 'quality' in ((encoderMap[type].meta as any).defaultOptions ?? {});
 }
 
+/**
+ * Build an SEO-friendly, filesystem-safe filename: lowercase, spaces and
+ * any non-alphanumerics (including emoji) collapsed to single hyphens,
+ * diacritics stripped, extension preserved and lowercased.
+ */
+function seoName(filename: string): string {
+  const dot = filename.lastIndexOf('.');
+  const base = dot > 0 ? filename.slice(0, dot) : filename;
+  const ext =
+    dot > 0
+      ? filename
+          .slice(dot + 1)
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '')
+      : '';
+  const slug =
+    base
+      .normalize('NFKD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-') || 'image';
+  return ext ? `${slug}.${ext}` : slug;
+}
+
 function encoderStateFor(type: EncoderType, quality?: number): EncoderState {
   const options = { ...(encoderMap[type].meta as any).defaultOptions };
   if (quality != null && 'quality' in options) options.quality = quality;
@@ -299,7 +325,10 @@ export default class Tool extends Component<Props, State> {
           try {
             const img = await loadImage(item.file);
             const { canvas, meta } = await removeWatermarkFromImage(img);
-            const resultFile = await canvasToPngFile(canvas, item.file.name);
+            const resultFile = await canvasToPngFile(
+              canvas,
+              seoName(item.file.name),
+            );
             const url = URL.createObjectURL(resultFile);
             this.putResult(item.id, 'cleaned', {
               status: 'done',
@@ -340,7 +369,7 @@ export default class Tool extends Component<Props, State> {
               signal,
               imageData,
               encoderStateFor(t.key as EncoderType, this.state.quality),
-              item.file.name,
+              seoName(item.file.name),
               this.workerBridge,
             );
             const url = URL.createObjectURL(result);
@@ -382,14 +411,6 @@ export default class Tool extends Component<Props, State> {
     for (const item of this.state.items)
       for (const r of item.results)
         if (r.status === 'done') this.triggerDownload(r);
-  };
-
-  /** Download only the smallest encoded result for each item. */
-  private downloadSmallest = () => {
-    for (const item of this.state.items) {
-      const best = smallestResult(item);
-      if (best) this.triggerDownload(best);
-    }
   };
 
   private openModal = (id: string) =>
@@ -594,19 +615,6 @@ export default class Tool extends Component<Props, State> {
                     : `Process all (${items.length})`}
                 </button>
               )}
-              {doneCount > 0 &&
-                !processing &&
-                !isWatermark &&
-                subMode === 'all' && (
-                  <button class={style.btnAdd} onClick={this.downloadSmallest}>
-                    Download smallest ({items.length})
-                  </button>
-                )}
-              {doneCount > 0 && !processing && (
-                <button class={style.btnPrimary} onClick={this.downloadAll}>
-                  Download all ({doneCount})
-                </button>
-              )}
             </div>
           )}
         </section>
@@ -648,14 +656,29 @@ export default class Tool extends Component<Props, State> {
             </button>
           ) : (
             <div class={style.list}>
-              {totalResult > 0 && !isWatermark && (
-                <div class={style.summary}>
-                  <span>
-                    Total: {prettyBytes(totalOriginal)} →{' '}
-                    <strong>{prettyBytes(totalResult)}</strong> across{' '}
-                    {doneCount} file{doneCount === 1 ? '' : 's'}
-                  </span>
-                  <span class={style.savedBadge}>{saved}% smaller</span>
+              {doneCount > 0 && !processing && (
+                <div class={style.listHeader}>
+                  <div class={style.listHeaderInfo}>
+                    {totalResult > 0 && !isWatermark ? (
+                      <Fragment>
+                        <span>
+                          Total: {prettyBytes(totalOriginal)} →{' '}
+                          <strong>{prettyBytes(totalResult)}</strong> across{' '}
+                          {doneCount} file{doneCount === 1 ? '' : 's'}
+                        </span>
+                        {saved > 0 && (
+                          <span class={style.savedBadge}>{saved}% smaller</span>
+                        )}
+                      </Fragment>
+                    ) : (
+                      <span>
+                        {doneCount} result{doneCount === 1 ? '' : 's'} ready
+                      </span>
+                    )}
+                  </div>
+                  <button class={style.btnPrimary} onClick={this.downloadAll}>
+                    Download all ({doneCount})
+                  </button>
                 </div>
               )}
               {items.map((item) => {
@@ -809,7 +832,7 @@ export default class Tool extends Component<Props, State> {
                     <a
                       class={style.modalOrig}
                       href={item.previewUrl}
-                      download={item.file.name}
+                      download={seoName(item.file.name)}
                     >
                       Original · {prettyBytes(item.file.size)}
                     </a>
