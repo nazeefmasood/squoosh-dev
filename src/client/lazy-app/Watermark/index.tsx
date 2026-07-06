@@ -39,6 +39,8 @@ interface WatermarkItem {
 interface State {
   items: WatermarkItem[];
   processing: boolean;
+  modalId?: string;
+  comparePct: number;
 }
 
 let idCounter = 0;
@@ -95,6 +97,7 @@ export default class Watermark extends Component<Props, State> {
       status: 'pending' as ItemStatus,
     })),
     processing: false,
+    comparePct: 50,
   };
 
   private fileInput?: HTMLInputElement;
@@ -207,7 +210,7 @@ export default class Watermark extends Component<Props, State> {
                       ? (URL.revokeObjectURL(i.resultUrl), url)
                       : url,
                     resultSize: resultFile.size,
-                    detected: !!(meta && (meta as any).detected),
+                    detected: !!(meta && (meta as any).applied),
                   }
                 : i,
             ),
@@ -226,6 +229,12 @@ export default class Watermark extends Component<Props, State> {
     this.setState({ processing: false });
   };
 
+  private openModal = (id: string) =>
+    this.setState({ modalId: id, comparePct: 50 });
+  private closeModal = () => this.setState({ modalId: undefined });
+  private onCompareChange = (e: Event) =>
+    this.setState({ comparePct: +(e.target as HTMLInputElement).value });
+
   private downloadAll = () => {
     for (const item of this.state.items) {
       if (item.status === 'done' && item.resultUrl) {
@@ -239,7 +248,7 @@ export default class Watermark extends Component<Props, State> {
     }
   };
 
-  render({ onBack }: Props, { items, processing }: State) {
+  render({ onBack }: Props, { items, processing, modalId, comparePct }: State) {
     const doneCount = items.filter((i) => i.status === 'done').length;
     const allDone = doneCount === items.length && items.length > 0;
 
@@ -374,12 +383,14 @@ export default class Watermark extends Component<Props, State> {
                       class={style.thumb}
                       src={item.previewUrl}
                       alt={item.file.name}
+                      onClick={() => this.openModal(item.id)}
                     />
                     {item.resultUrl && (
                       <img
                         class={style.thumb}
                         src={item.resultUrl}
                         alt={`${item.file.name} cleaned`}
+                        onClick={() => this.openModal(item.id)}
                       />
                     )}
                   </div>
@@ -559,6 +570,77 @@ export default class Watermark extends Component<Props, State> {
             <span class={style.footerMade}>Runs 100% in your browser</span>
           </div>
         </footer>
+
+        {modalId &&
+          (() => {
+            const item = items.find((i) => i.id === modalId);
+            if (!item || !item.resultUrl) return null;
+            return (
+              <div
+                class={style.modalOverlay}
+                onClick={this.closeModal}
+                role="dialog"
+                aria-modal="true"
+              >
+                <div class={style.modal} onClick={(e) => e.stopPropagation()}>
+                  <div class={style.modalHead}>
+                    <span class={style.modalTitle}>{item.file.name}</span>
+                    <button
+                      class={style.modalClose}
+                      onClick={this.closeModal}
+                      aria-label="Close"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div class={style.compare}>
+                    <img
+                      class={style.compareImg}
+                      src={item.resultUrl}
+                      alt="after"
+                    />
+                    <img
+                      class={style.compareBefore}
+                      src={item.previewUrl}
+                      alt="before"
+                      style={{
+                        clipPath: `inset(0 ${100 - comparePct}% 0 0)`,
+                      }}
+                    />
+                    <div
+                      class={style.compareHandle}
+                      style={{ left: `${comparePct}%` }}
+                    >
+                      <span class={style.compareBadge}>Before</span>
+                    </div>
+                    <span class={`${style.compareBadge} ${style.afterBadge}`}>
+                      After
+                    </span>
+                  </div>
+                  <input
+                    class={style.compareRange}
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={comparePct}
+                    onInput={this.onCompareChange}
+                    aria-label="Before / after slider"
+                  />
+                  <div class={style.modalActions}>
+                    <a
+                      class={style.btnPrimary}
+                      href={item.resultUrl}
+                      download={
+                        item.file.name.replace(/.[^.]*$/, '') + '-clean.png'
+                      }
+                    >
+                      Download cleaned
+                    </a>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
       </div>
     );
   }

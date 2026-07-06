@@ -282,6 +282,154 @@
   border-radius: var(--radius-sm);
   background: var(--gray-100);
   border: 1px solid var(--line);
+  cursor: zoom-in;
+  transition: transform 0.1s, border-color 0.15s;
+}
+
+.thumb:hover {
+  border-color: var(--iris);
+  transform: scale(1.04);
+}
+
+/* ---- Modal / before-after compare ---- */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10, 10, 10, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal {
+  background: var(--paper-raised);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-width: 920px;
+  width: 100%;
+  max-height: 92vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modalTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modalClose {
+  composes: unbutton from global;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  color: var(--gray-500);
+  cursor: pointer;
+  font-size: 14px;
+  flex: none;
+}
+
+.modalClose:hover {
+  background: var(--gray-100);
+  color: var(--ink);
+}
+
+.compare {
+  position: relative;
+  width: 100%;
+  max-height: 70vh;
+  background: #000;
+  overflow: hidden;
+  user-select: none;
+}
+
+.compareImg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  margin: 0 auto;
+}
+
+.compareBefore {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+.compareHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fff;
+  transform: translateX(-1px);
+  pointer-events: none;
+}
+
+.compareBadge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+}
+
+.afterBadge {
+  left: auto;
+  right: 12px;
+}
+
+.compareRange {
+  width: calc(100% - 32px);
+  margin: 14px 16px;
+  accent-color: var(--iris);
+  cursor: ew-resize;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 16px 16px;
 }
 
 .rowMeta {
