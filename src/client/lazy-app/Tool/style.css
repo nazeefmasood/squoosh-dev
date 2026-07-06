@@ -292,10 +292,17 @@
 .btnPrimary {
   background: var(--action-gradient);
   color: var(--color-ink-black);
+  transition: transform 0.2s ease, box-shadow 0.3s ease, filter 0.2s ease;
 }
 
 .btnPrimary:hover {
-  filter: brightness(1.04) saturate(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  filter: saturate(1.18) brightness(1.03);
+}
+
+.btnPrimary:active {
+  transform: translateY(0);
 }
 
 .btnAdd {

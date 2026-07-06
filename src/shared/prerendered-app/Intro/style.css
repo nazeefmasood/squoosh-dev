@@ -100,10 +100,13 @@
   color: var(--color-ink-black);
   background: var(--action-gradient);
   border: 1px solid transparent;
+  transition: transform 0.2s ease, box-shadow 0.3s ease, filter 0.2s ease;
 }
 
 .navLink:hover {
-  filter: brightness(1.04) saturate(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+  filter: saturate(1.18) brightness(1.03);
 }
 
 /* Paste — quiet ghost action. */
@@ -279,31 +282,41 @@
   background: var(--action-gradient);
   color: var(--color-ink-black);
   font-weight: var(--fw-regular);
+  transition: transform 0.2s ease, box-shadow 0.3s ease, filter 0.2s ease;
 }
 
 .btnPrimary:hover {
-  filter: brightness(1.04) saturate(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  filter: saturate(1.18) brightness(1.03);
 }
 
-/* ---- Format chips (tag pills) ---- */
+.btnPrimary:active {
+  transform: translateY(0);
+}
+
+/* ---- Format list — clean inline, middot-separated ---- */
 .formats {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: var(--spacing-8);
-  margin-top: var(--spacing-24);
+  align-items: center;
+  gap: 0;
+  margin-top: var(--spacing-32);
 }
 
 .format {
   font-size: var(--text-caption);
   font-weight: var(--fw-regular);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-ink-black);
-  background: transparent;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-pill);
-  padding: 6px 12px;
+  color: var(--text-faint);
+}
+
+.format:not(:last-child)::after {
+  content: '·';
+  margin: 0 var(--spacing-12);
+  color: var(--text-faint);
 }
 
 /* ============================================================
@@ -455,10 +468,13 @@
   padding: 12px 22px;
   cursor: pointer;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.3s ease, filter 0.2s ease;
 }
 
 .installBtn:hover {
-  filter: brightness(1.04) saturate(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.2);
+  filter: saturate(1.18) brightness(1.03);
 }
 
 /* ============================================================
