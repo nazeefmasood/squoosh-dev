@@ -14,11 +14,12 @@ snack-bar {
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  left: 50%;
+  right: 20px;
+  left: auto;
   bottom: 20px;
   width: auto;
-  max-width: calc(100% - 32px);
-  transform: translateX(-50%);
+  max-width: calc(100% - 40px);
+  transform: none;
   background: var(--ink, #1a365d);
   border-radius: 999px;
   box-shadow: 0 6px 20px rgba(10, 10, 10, 0.18);
@@ -39,18 +40,18 @@ snack-bar {
 @keyframes snackbar-show {
   from {
     opacity: 0;
-    transform: translate(-50%, 10px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: translateY(0);
   }
 }
 
 @keyframes snackbar-hide {
   to {
     opacity: 0;
-    transform: translate(-50%, 10px);
+    transform: translateY(10px);
   }
 }
 
