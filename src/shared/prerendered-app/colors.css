@@ -71,10 +71,11 @@ html {
   --accent-magenta: var(--color-magenta-bloom);
   --accent-teal: var(--color-forest-teal);
 
-  /* Primary filled action — black on cream (no chromatic CTA). */
+  /* Primary filled action — logo gradient fill, cream text. */
   --action: var(--color-ink-black);
   --action-hover: #1a1a1a;
   --action-fg: var(--color-bone-white);
+  --action-gradient: var(--brand-gradient);
 
   /* ---- Text ---- */
   --text: var(--color-ink-black);

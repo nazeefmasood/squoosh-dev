@@ -240,12 +240,12 @@
 }
 
 .btnPrimary {
-  background: var(--action);
-  color: var(--action-fg);
+  background: var(--action-gradient);
+  color: var(--color-ink-black);
 }
 
 .btnPrimary:hover {
-  background: var(--action-hover);
+  filter: brightness(1.04) saturate(1.05);
 }
 
 .btnAdd {

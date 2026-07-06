@@ -260,12 +260,13 @@
 }
 
 .btnPrimary {
-  background: var(--action);
-  color: var(--action-fg);
+  background: var(--action-gradient);
+  color: var(--color-ink-black);
+  font-weight: var(--fw-regular);
 }
 
 .btnPrimary:hover {
-  background: var(--action-hover);
+  filter: brightness(1.04) saturate(1.05);
 }
 
 /* ---- Format chips (tag pills) ---- */
@@ -427,18 +428,18 @@
   bottom: var(--spacing-24);
   font-family: var(--font-nng);
   font-size: var(--text-caption);
-  font-weight: var(--fw-medium);
-  color: var(--action-fg);
-  background: var(--action);
+  font-weight: var(--fw-regular);
+  color: var(--color-ink-black);
+  background: var(--action-gradient);
   border: 0;
   border-radius: var(--radius-button);
   padding: 12px 22px;
   cursor: pointer;
-  box-shadow: var(--shadow-overlay);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
 }
 
 .installBtn:hover {
-  background: var(--action-hover);
+  filter: brightness(1.04) saturate(1.05);
 }
 
 /* ============================================================
