@@ -317,10 +317,10 @@
   background: var(--paper-raised);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  max-width: 920px;
+  max-width: 960px;
   width: 100%;
   max-height: 92vh;
-  overflow: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -330,12 +330,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 18px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--line);
 }
 
 .modalTitle {
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--ink);
   white-space: nowrap;
@@ -393,17 +393,34 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 2px;
+  width: 3px;
   background: #fff;
-  transform: translateX(-1px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  transform: translateX(-1.5px);
   pointer-events: none;
+}
+
+.compareHandle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: var(--shadow);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%231a365d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 7l-5 5 5 5M15 7l5 5-5 5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
 .compareBadge {
   position: absolute;
   top: 12px;
   left: 12px;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.65);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
@@ -411,6 +428,7 @@
   padding: 4px 9px;
   border-radius: var(--radius-pill);
   pointer-events: none;
+  backdrop-filter: blur(4px);
 }
 
 .afterBadge {
@@ -419,10 +437,11 @@
 }
 
 .compareRange {
-  width: calc(100% - 32px);
-  margin: 14px 16px;
+  width: calc(100% - 48px);
+  margin: 16px 24px 4px;
   accent-color: var(--iris);
   cursor: ew-resize;
+  height: 6px;
 }
 
 .modalActions {

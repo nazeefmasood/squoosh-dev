@@ -20,6 +20,14 @@ img,
   -webkit-touch-callout: none;
 }
 
+:global(a) {
+  text-decoration: none;
+}
+
+:global(a:hover) {
+  text-decoration: none;
+}
+
 html,
 body {
   height: 100%;
