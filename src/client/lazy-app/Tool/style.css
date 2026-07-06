@@ -359,8 +359,8 @@
   align-items: center;
   text-align: center;
   width: 100%;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-image);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 12px;
   background: transparent;
   padding: var(--spacing-96) var(--spacing-24);
   cursor: pointer;

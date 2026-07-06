@@ -185,8 +185,8 @@
 /* ---- Dropzone (sharp editorial panel) ---- */
 .dropzone {
   margin-top: var(--spacing-32);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-image);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 12px;
   background: transparent;
   padding: var(--spacing-80) var(--spacing-24);
   cursor: pointer;
@@ -309,11 +309,16 @@
   padding: var(--spacing-24) 0 0;
 }
 
-/* One chromatic rupture — the middle card takes a mint surface. */
+/* One chromatic rupture — the middle card takes the logo gradient. */
 .feature:nth-child(2) {
-  background: var(--color-mint-wash);
+  background: var(--brand-gradient);
   border-top: 0;
   padding: var(--card-padding);
+}
+
+.feature:nth-child(2) h3,
+.feature:nth-child(2) p {
+  color: var(--color-ink-black);
 }
 
 .featureIcon {
@@ -363,7 +368,7 @@
 
 .footerFullLogo {
   display: block;
-  height: 40px;
+  height: 64px;
   width: auto;
 }
 
