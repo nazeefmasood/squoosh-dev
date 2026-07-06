@@ -52,6 +52,7 @@ interface State {
   items: Item[];
   subMode: SubMode;
   encoderType: EncoderType;
+  quality: number;
   processing: boolean;
   processedCount: number;
   modalId?: string;
@@ -70,11 +71,15 @@ function prettyBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function encoderStateFor(type: EncoderType): EncoderState {
-  return {
-    type,
-    options: (encoderMap[type].meta as any).defaultOptions,
-  } as EncoderState;
+/** Encoders that expose a 0–100 `quality` option we can drive from the UI. */
+function encoderHasQuality(type: EncoderType): boolean {
+  return 'quality' in ((encoderMap[type].meta as any).defaultOptions ?? {});
+}
+
+function encoderStateFor(type: EncoderType, quality?: number): EncoderState {
+  const options = { ...(encoderMap[type].meta as any).defaultOptions };
+  if (quality != null && 'quality' in options) options.quality = quality;
+  return { type, options } as EncoderState;
 }
 
 /** The done result with the smallest output file for an item, if any. */
@@ -152,6 +157,7 @@ export default class Tool extends Component<Props, State> {
     items: this.props.files.map(newItem),
     subMode: 'single',
     encoderType: 'mozJPEG',
+    quality: 75,
     processing: false,
     processedCount: 0,
     comparePct: 50,
@@ -188,6 +194,8 @@ export default class Tool extends Component<Props, State> {
     if (this.state.processing) return;
     this.setState({ subMode: sm });
   };
+  private onQualityChange = (e: Event) =>
+    this.setState({ quality: +(e.target as HTMLInputElement).value });
 
   private addFiles = (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'));
@@ -331,7 +339,7 @@ export default class Tool extends Component<Props, State> {
             const result = await compressImage(
               signal,
               imageData,
-              encoderStateFor(t.key as EncoderType),
+              encoderStateFor(t.key as EncoderType, this.state.quality),
               item.file.name,
               this.workerBridge,
             );
@@ -396,6 +404,7 @@ export default class Tool extends Component<Props, State> {
       items,
       subMode,
       encoderType,
+      quality,
       processing,
       processedCount,
       modalId,
@@ -539,6 +548,23 @@ export default class Tool extends Component<Props, State> {
                   </select>
                 </label>
               )}
+              {!isWatermark &&
+                (subMode === 'all' || encoderHasQuality(encoderType)) && (
+                  <label class={style.qualityField}>
+                    <span>Quality</span>
+                    <input
+                      class={style.qualityRange}
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={quality}
+                      onInput={this.onQualityChange}
+                      disabled={processing}
+                      aria-label="Quality"
+                    />
+                    <span class={style.qualityVal}>{quality}</span>
+                  </label>
+                )}
               <div class={style.spacer} />
               <button class={style.btnAdd} onClick={this.onAddFilesClick}>
                 + Add images

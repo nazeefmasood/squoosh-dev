@@ -225,6 +225,56 @@
   cursor: pointer;
 }
 
+/* ---- Quality slider ---- */
+.qualityField {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-10);
+  font-size: var(--text-body-sm);
+  color: var(--text-muted);
+}
+
+.qualityRange {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 2px;
+  background: var(--line-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.qualityRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink-black);
+  cursor: pointer;
+  border: 0;
+}
+
+.qualityRange::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink-black);
+  cursor: pointer;
+  border: 0;
+}
+
+.qualityRange:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.qualityVal {
+  min-width: 2.5ch;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
 /* ---- Buttons ---- */
 .btnPrimary,
 .btnAdd,
