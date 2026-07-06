@@ -1,4 +1,4 @@
-import { h, Component } from 'preact';
+import { h, Component, Fragment } from 'preact';
 
 import logoIcon from 'url:static-build/assets/brand/smoosh-icon.png';
 import logoFull from 'url:static-build/assets/brand/smoosh-full.png';
@@ -34,6 +34,7 @@ type Tool = 'compress' | 'watermark';
 interface Props {
   tool?: Tool;
   onToolChange?: (tool: Tool) => void;
+  onOpenTool?: (tool: Tool) => void;
   onFile?: (file: File) => void;
   onFiles?: (files: File[]) => void;
   showSnack?: SnackBarElement['showSnackbar'];
@@ -157,7 +158,7 @@ export default class Intro extends Component<Props, State> {
   };
 
   render(
-    { tool = 'compress', onToolChange }: Props,
+    { tool = 'compress', onToolChange, onOpenTool }: Props,
     { beforeInstallEvent, dragging }: State,
   ) {
     return (
@@ -221,13 +222,22 @@ export default class Intro extends Component<Props, State> {
 
         <section class={style.hero}>
           <h1>
-            Compress images. <span class={style.accent}>Fast, private,</span>{' '}
-            pixel-perfect.
+            {tool === 'watermark' ? (
+              <Fragment>
+                Remove <span class={style.accent}>Gemini watermarks</span>,
+                privately.
+              </Fragment>
+            ) : (
+              <Fragment>
+                Compress images.{' '}
+                <span class={style.accent}>Fast, private,</span> pixel-perfect.
+              </Fragment>
+            )}
           </h1>
           <p class={style.heroSub}>
-            Smoosh shrinks and converts images with industry codecs — right in
-            your browser. Your files never leave your device. Compare codecs
-            side by side and batch a whole folder at once.
+            {tool === 'watermark'
+              ? 'Smoosh cleanly removes Gemini AI watermarks using reverse alpha blending — a mathematically exact inversion, not AI inpainting. Batch supported, fully private.'
+              : 'Smoosh shrinks and converts images with industry codecs — right in your browser. Your files never leave your device. Compare codecs side by side and batch a whole folder at once.'}
           </p>
 
           {onToolChange && (
@@ -282,7 +292,11 @@ export default class Intro extends Component<Props, State> {
                   />
                 </svg>
               </div>
-              <div class={style.dropTitle}>Drop images here</div>
+              <div class={style.dropTitle}>
+                {tool === 'watermark'
+                  ? 'Drop Gemini-generated images'
+                  : 'Drop images here'}
+              </div>
               <div class={style.dropHint}>
                 or <span class={style.browse}>browse files</span>
                 {supportsClipboardAPI ? ' · paste from clipboard' : ''}
@@ -388,10 +402,32 @@ export default class Intro extends Component<Props, State> {
             <div class={style.footerCols}>
               <div class={style.footerCol}>
                 <h4>Tools</h4>
-                <a class={style.footerLink} href="/">
+                <a
+                  class={style.footerLink}
+                  href="/editor?tool=compress"
+                  onClick={
+                    onOpenTool
+                      ? (e) => {
+                          e.preventDefault();
+                          onOpenTool('compress');
+                        }
+                      : undefined
+                  }
+                >
                   Compress
                 </a>
-                <a class={style.footerLink} href="/watermark">
+                <a
+                  class={style.footerLink}
+                  href="/editor?tool=watermark"
+                  onClick={
+                    onOpenTool
+                      ? (e) => {
+                          e.preventDefault();
+                          onOpenTool('watermark');
+                        }
+                      : undefined
+                  }
+                >
                   Watermark remover
                 </a>
               </div>

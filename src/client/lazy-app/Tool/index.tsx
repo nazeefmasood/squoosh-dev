@@ -1,4 +1,4 @@
-import { h, Component } from 'preact';
+import { h, Component, Fragment } from 'preact';
 
 import * as style from './style.css';
 import 'add-css:./style.css';
@@ -6,15 +6,19 @@ import logoIcon from 'url:static-build/assets/brand/smoosh-icon.png';
 import WorkerBridge from '../worker-bridge';
 import { decodeImage, compressImage } from '../pipeline';
 import { encoderMap, EncoderType, EncoderState } from '../feature-meta';
+import { removeWatermarkFromImage } from 'vendor/gwm';
 import type SnackBarElement from 'shared/custom-els/snack-bar';
+
+export type ToolMode = 'compress' | 'watermark';
 
 interface Props {
   files: File[];
-  showSnack: SnackBarElement['showSnackbar'];
+  mode: ToolMode;
+  onModeChange: (mode: ToolMode) => void;
   onBack: () => void;
+  showSnack: SnackBarElement['showSnackbar'];
 }
 
-/** Formats produced in "all formats" mode. */
 const ALL_FORMATS: EncoderType[] = [
   'mozJPEG',
   'webP',
@@ -22,42 +26,39 @@ const ALL_FORMATS: EncoderType[] = [
   'oxiPNG',
   'browserPNG',
 ];
-const SINGLE_FORMATS: EncoderType[] = [
-  'mozJPEG',
-  'webP',
-  'avif',
-  'oxiPNG',
-  'browserPNG',
-];
+const SINGLE_FORMATS: EncoderType[] = [...ALL_FORMATS];
 
-type Mode = 'single' | 'all';
-type ItemStatus = 'pending' | 'processing' | 'done' | 'error';
+type SubMode = 'single' | 'all';
+type Status = 'pending' | 'processing' | 'done' | 'error';
 
-interface FormatResult {
-  format: EncoderType;
-  status: ItemStatus;
+interface Result {
+  key: string; // encoder type, or 'cleaned'
+  label: string;
+  status: Status;
   file?: File;
   url?: string;
+  applied?: boolean;
   error?: string;
 }
 
-interface BatchItem {
+interface Item {
   id: string;
   file: File;
   previewUrl: string;
-  results: FormatResult[];
+  results: Result[];
 }
 
 interface State {
-  items: BatchItem[];
+  items: Item[];
+  subMode: SubMode;
   encoderType: EncoderType;
-  mode: Mode;
   processing: boolean;
   modalId?: string;
+  comparePct: number;
 }
 
 let idCounter = 0;
-const nextId = () => `item-${idCounter++}`;
+const nextId = () => `t-${idCounter++}`;
 
 function prettyBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -72,11 +73,7 @@ function encoderStateFor(type: EncoderType): EncoderState {
   } as EncoderState;
 }
 
-function formatsFor(mode: Mode, encoderType: EncoderType): EncoderType[] {
-  return mode === 'all' ? ALL_FORMATS : [encoderType];
-}
-
-function newItem(file: File): BatchItem {
+function newItem(file: File): Item {
   return {
     id: nextId(),
     file,
@@ -85,17 +82,80 @@ function newItem(file: File): BatchItem {
   };
 }
 
-export default class Batch extends Component<Props, State> {
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('decode'));
+    };
+    img.src = url;
+  });
+}
+
+function canvasToPngFile(canvas: any, name: string): Promise<File> {
+  const out = name.replace(/.[^.]*$/, '') + '-clean.png';
+  if (typeof canvas.convertToBlob === 'function') {
+    return canvas
+      .convertToBlob({ type: 'image/png' })
+      .then((blob: Blob) => new File([blob], out, { type: 'image/png' }));
+  }
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob: Blob | null) => {
+      if (!blob) {
+        reject(new Error('encode'));
+        return;
+      }
+      resolve(new File([blob], out, { type: 'image/png' }));
+    }, 'image/png');
+  });
+}
+
+/** Result "targets" for the current mode. */
+function targetsFor(
+  mode: ToolMode,
+  subMode: SubMode,
+  encoderType: EncoderType,
+): Result[] {
+  if (mode === 'watermark') {
+    return [{ key: 'cleaned', label: 'Cleaned', status: 'pending' }];
+  }
+  const formats = subMode === 'all' ? ALL_FORMATS : [encoderType];
+  return formats.map((f) => ({
+    key: f,
+    label: encoderMap[f].meta.label,
+    status: 'pending',
+  }));
+}
+
+export default class Tool extends Component<Props, State> {
   state: State = {
     items: this.props.files.map(newItem),
+    subMode: 'single',
     encoderType: 'mozJPEG',
-    mode: 'single',
     processing: false,
+    comparePct: 50,
   };
 
   private workerBridge = new WorkerBridge();
   private abortController?: AbortController;
   private fileInput?: HTMLInputElement;
+
+  componentDidUpdate(prevProps: Props) {
+    // Clearing results when the tool mode switches keeps the UI consistent.
+    if (prevProps.mode !== this.props.mode && this.state.items.length) {
+      for (const it of this.state.items)
+        for (const r of it.results) if (r.url) URL.revokeObjectURL(r.url);
+      this.setState((prev) => ({
+        items: prev.items.map((i) => ({ ...i, results: [] })),
+      }));
+    }
+  }
 
   componentWillUnmount() {
     this.abortController?.abort();
@@ -109,9 +169,9 @@ export default class Batch extends Component<Props, State> {
     this.setState({
       encoderType: (e.target as HTMLSelectElement).value as EncoderType,
     });
-  private onModeChange = (mode: Mode) => {
+  private onSubModeChange = (sm: SubMode) => {
     if (this.state.processing) return;
-    this.setState({ mode });
+    this.setState({ subMode: sm });
   };
 
   private addFiles = (files: File[]) => {
@@ -152,21 +212,26 @@ export default class Batch extends Component<Props, State> {
     this.setState({ items: [] });
   };
 
-  private setFormat = (
-    itemId: string,
-    format: EncoderType,
-    patch: Partial<FormatResult>,
-  ) => {
+  private putResult = (itemId: string, key: string, patch: Partial<Result>) => {
     this.setState((prev) => ({
       items: prev.items.map((i) =>
         i.id === itemId
           ? {
               ...i,
-              results: i.results.some((r) => r.format === format)
-                ? i.results.map((r) =>
-                    r.format === format ? { ...r, ...patch } : r,
-                  )
-                : [...i.results, { format, status: 'pending', ...patch }],
+              results: i.results.some((r) => r.key === key)
+                ? i.results.map((r) => (r.key === key ? { ...r, ...patch } : r))
+                : [
+                    ...i.results,
+                    {
+                      key,
+                      label:
+                        key === 'cleaned'
+                          ? 'Cleaned'
+                          : encoderMap[key as EncoderType].meta.label,
+                      status: 'pending',
+                      ...patch,
+                    },
+                  ],
             }
           : i,
       ),
@@ -175,7 +240,19 @@ export default class Batch extends Component<Props, State> {
 
   private processAll = async () => {
     if (this.state.processing) return;
-    const targets = formatsFor(this.state.mode, this.state.encoderType);
+    const { mode, subMode, encoderType } =
+      this.props.mode === 'watermark'
+        ? {
+            mode: this.props.mode,
+            subMode: 'single' as SubMode,
+            encoderType: 'mozJPEG' as EncoderType,
+          }
+        : {
+            mode: this.props.mode,
+            subMode: this.state.subMode,
+            encoderType: this.state.encoderType,
+          };
+    const targets = targetsFor(this.props.mode, subMode, encoderType);
     this.abortController = new AbortController();
     this.setState({ processing: true });
 
@@ -183,18 +260,47 @@ export default class Batch extends Component<Props, State> {
       for (const item of this.state.items) {
         if (this.abortController.signal.aborted) break;
         const signal = this.abortController.signal;
-        // Decode once per image.
+
+        if (this.props.mode === 'watermark') {
+          this.putResult(item.id, 'cleaned', {
+            status: 'processing',
+            error: undefined,
+          });
+          try {
+            const img = await loadImage(item.file);
+            const { canvas, meta } = await removeWatermarkFromImage(img);
+            const resultFile = await canvasToPngFile(canvas, item.file.name);
+            const url = URL.createObjectURL(resultFile);
+            this.putResult(item.id, 'cleaned', {
+              status: 'done',
+              file: resultFile,
+              url,
+              applied: !!(meta && (meta as any).applied),
+            });
+          } catch {
+            this.putResult(item.id, 'cleaned', {
+              status: 'error',
+              error: 'Failed',
+            });
+          }
+          continue;
+        }
+
+        // compress: decode once, encode each format
         let imageData: ImageData;
         try {
           imageData = await decodeImage(signal, item.file, this.workerBridge);
         } catch {
-          for (const f of targets)
-            this.setFormat(item.id, f, { status: 'error', error: 'Decode' });
+          for (const t of targets)
+            this.putResult(item.id, t.key, {
+              status: 'error',
+              error: 'Decode',
+            });
           continue;
         }
-        for (const format of targets) {
+        for (const t of targets) {
           if (this.abortController.signal.aborted) break;
-          this.setFormat(item.id, format, {
+          this.putResult(item.id, t.key, {
             status: 'processing',
             error: undefined,
           });
@@ -202,48 +308,22 @@ export default class Batch extends Component<Props, State> {
             const result = await compressImage(
               signal,
               imageData,
-              encoderStateFor(format),
+              encoderStateFor(t.key as EncoderType),
               item.file.name,
               this.workerBridge,
             );
             const url = URL.createObjectURL(result);
-            this.setState((prev) => ({
-              items: prev.items.map((i) =>
-                i.id === item.id
-                  ? {
-                      ...i,
-                      results: i.results.some((r) => r.format === format)
-                        ? i.results.map((r) =>
-                            r.format === format
-                              ? {
-                                  ...r,
-                                  status: 'done' as ItemStatus,
-                                  file: result,
-                                  url: r.url
-                                    ? (URL.revokeObjectURL(r.url!), url)
-                                    : url,
-                                }
-                              : r,
-                          )
-                        : [
-                            ...i.results,
-                            {
-                              format,
-                              status: 'done' as ItemStatus,
-                              file: result,
-                              url,
-                            },
-                          ],
-                    }
-                  : i,
-              ),
-            }));
+            this.putResult(item.id, t.key, {
+              status: 'done',
+              file: result,
+              url,
+            });
           } catch (err) {
             const msg =
               err instanceof Error && err.name === 'AbortError'
                 ? 'Cancelled'
                 : 'Failed';
-            this.setFormat(item.id, format, { status: 'error', error: msg });
+            this.putResult(item.id, t.key, { status: 'error', error: msg });
           }
         }
       }
@@ -256,10 +336,9 @@ export default class Batch extends Component<Props, State> {
     this.abortController?.abort();
     this.setState({ processing: false });
   };
-
   private downloadAll = () => {
-    for (const item of this.state.items) {
-      for (const r of item.results) {
+    for (const item of this.state.items)
+      for (const r of item.results)
         if (r.status === 'done' && r.url && r.file) {
           const a = document.createElement('a');
           a.href = r.url;
@@ -268,17 +347,19 @@ export default class Batch extends Component<Props, State> {
           a.click();
           a.remove();
         }
-      }
-    }
   };
 
-  private openModal = (id: string) => this.setState({ modalId: id });
+  private openModal = (id: string) =>
+    this.setState({ modalId: id, comparePct: 50 });
   private closeModal = () => this.setState({ modalId: undefined });
+  private onCompareChange = (e: Event) =>
+    this.setState({ comparePct: +(e.target as HTMLInputElement).value });
 
   render(
-    { onBack }: Props,
-    { items, encoderType, mode, processing, modalId }: State,
+    { onBack, mode, onModeChange }: Props,
+    { items, subMode, encoderType, processing, modalId, comparePct }: State,
   ) {
+    const isWatermark = mode === 'watermark';
     const doneCount = items.reduce(
       (s, i) => s + i.results.filter((r) => r.status === 'done').length,
       0,
@@ -294,7 +375,7 @@ export default class Batch extends Component<Props, State> {
     const totalOriginal = items.reduce((s, i) => s + i.file.size, 0);
     const saved =
       totalResult > 0 ? Math.round((1 - totalResult / totalOriginal) * 100) : 0;
-    const targets = formatsFor(mode, encoderType);
+    const targets = targetsFor(mode, subMode, encoderType);
 
     return (
       <div class={style.page}>
@@ -320,8 +401,32 @@ export default class Batch extends Component<Props, State> {
             />
             <span class={style.wordmarkText}>Smoosh</span>
           </a>
-          <div class={style.navLinks}>
-            <button class={style.navLink} onClick={onBack}>
+          <div class={style.tabs} role="tablist" aria-label="Tool">
+            <button
+              class={`${style.tab}${
+                mode === 'compress' ? ' ' + style.tabActive : ''
+              }`}
+              role="tab"
+              aria-selected={mode === 'compress'}
+              onClick={() => onModeChange('compress')}
+            >
+              Compress
+            </button>
+            <button
+              class={`${style.tab}${
+                mode === 'watermark' ? ' ' + style.tabActive : ''
+              }`}
+              role="tab"
+              aria-selected={mode === 'watermark'}
+              onClick={() => onModeChange('watermark')}
+            >
+              Watermark remover
+            </button>
+            <button
+              class={style.navLink}
+              onClick={onBack}
+              aria-label="Back to home"
+            >
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
                   d="M15 6l-6 6 6 6"
@@ -331,43 +436,53 @@ export default class Batch extends Component<Props, State> {
                   stroke-linejoin="round"
                 />
               </svg>
-              <span>Back to home</span>
             </button>
           </div>
         </nav>
 
         <section class={style.hero}>
           <h1>
-            Batch compress into <span class={style.accent}>any format</span>,
-            all at once.
+            {isWatermark ? (
+              <Fragment>
+                Remove <span class={style.accent}>Gemini watermarks</span>,
+                right in your browser.
+              </Fragment>
+            ) : (
+              <Fragment>
+                Compress into <span class={style.accent}>any format</span>, all
+                at once.
+              </Fragment>
+            )}
           </h1>
           <p class={style.heroSub}>
-            Drop a folder of images and export each one to a single format — or
-            to <strong>all formats at once</strong>. Everything runs locally in
-            your browser.
+            {isWatermark
+              ? 'Drop your Gemini-generated images and Smoosh cleanly removes the watermark using reverse alpha blending — mathematically exact, fully private, batch supported.'
+              : 'Drop images and export each to a single format — or to all formats at once. Everything runs locally in your browser.'}
           </p>
 
           {items.length > 0 && (
             <div class={style.controls}>
-              <div class={style.modeToggle}>
-                <button
-                  class={`${style.modeTab}${
-                    mode === 'single' ? ' ' + style.modeTabActive : ''
-                  }`}
-                  onClick={() => this.onModeChange('single')}
-                >
-                  One format
-                </button>
-                <button
-                  class={`${style.modeTab}${
-                    mode === 'all' ? ' ' + style.modeTabActive : ''
-                  }`}
-                  onClick={() => this.onModeChange('all')}
-                >
-                  All formats
-                </button>
-              </div>
-              {mode === 'single' && (
+              {!isWatermark && (
+                <div class={style.modeToggle}>
+                  <button
+                    class={`${style.modeTab}${
+                      subMode === 'single' ? ' ' + style.modeTabActive : ''
+                    }`}
+                    onClick={() => this.onSubModeChange('single')}
+                  >
+                    One format
+                  </button>
+                  <button
+                    class={`${style.modeTab}${
+                      subMode === 'all' ? ' ' + style.modeTabActive : ''
+                    }`}
+                    onClick={() => this.onSubModeChange('all')}
+                  >
+                    All formats
+                  </button>
+                </div>
+              )}
+              {!isWatermark && subMode === 'single' && (
                 <label class={style.encoderField}>
                   <span>Format</span>
                   <select
@@ -396,7 +511,9 @@ export default class Batch extends Component<Props, State> {
                 </button>
               ) : (
                 <button class={style.btnPrimary} onClick={this.processAll}>
-                  {mode === 'all'
+                  {isWatermark
+                    ? `Remove watermarks (${items.length})`
+                    : subMode === 'all'
                     ? `Convert to all formats (${items.length})`
                     : `Process all (${items.length})`}
                 </button>
@@ -436,14 +553,18 @@ export default class Batch extends Component<Props, State> {
                   />
                 </svg>
               </div>
-              <div class={style.dropTitle}>Drop images to compress</div>
+              <div class={style.dropTitle}>
+                {isWatermark
+                  ? 'Drop Gemini-generated images'
+                  : 'Drop images to compress'}
+              </div>
               <div class={style.dropHint}>
-                or <span>browse files</span> · one format or all at once
+                or <span>browse files</span> · batch supported
               </div>
             </button>
           ) : (
             <div class={style.list}>
-              {totalResult > 0 && (
+              {totalResult > 0 && !isWatermark && (
                 <div class={style.summary}>
                   <span>
                     Total: {prettyBytes(totalOriginal)} →{' '}
@@ -454,9 +575,7 @@ export default class Batch extends Component<Props, State> {
                 </div>
               )}
               {items.map((item) => {
-                const resultsByFormat = new Map(
-                  item.results.map((r) => [r.format, r]),
-                );
+                const byKey = new Map(item.results.map((r) => [r.key, r]));
                 return (
                   <div class={style.row}>
                     <img
@@ -471,16 +590,14 @@ export default class Batch extends Component<Props, State> {
                         {prettyBytes(item.file.size)}
                       </div>
                       <div class={style.formatGrid}>
-                        {targets.map((format) => {
-                          const r = resultsByFormat.get(format);
+                        {targets.map((t) => {
+                          const r = byKey.get(t.key);
                           return (
                             <div
                               class={style.formatChip}
                               data-status={r?.status}
                             >
-                              <span class={style.formatLabel}>
-                                {encoderMap[format].meta.label}
-                              </span>
+                              <span class={style.formatLabel}>{t.label}</span>
                               {r?.status === 'processing' && (
                                 <span class={style.formatMeta}>…</span>
                               )}
@@ -489,21 +606,26 @@ export default class Batch extends Component<Props, State> {
                                   class={style.formatDl}
                                   href={r.url}
                                   download={r.file.name}
-                                  title={`${
-                                    encoderMap[format].meta.label
-                                  } · ${prettyBytes(r.file.size)}`}
+                                  title={prettyBytes(r.file.size)}
                                 >
                                   {prettyBytes(r.file.size)} ↓
                                 </a>
                               )}
                               {r?.status === 'error' && (
-                                <span class={style.formatMeta}>failed</span>
+                                <span class={style.formatMeta}>{r.error}</span>
                               )}
                               {!r && <span class={style.formatMeta}>—</span>}
                             </div>
                           );
                         })}
                       </div>
+                      {isWatermark && item.results[0]?.status === 'done' && (
+                        <div class={style.detected}>
+                          {item.results[0].applied === false
+                            ? 'No watermark detected — output unchanged'
+                            : 'Watermark removed'}
+                        </div>
+                      )}
                     </div>
                     {!processing && (
                       <button
@@ -544,12 +666,48 @@ export default class Batch extends Component<Props, State> {
                       ✕
                     </button>
                   </div>
-                  <div class={style.modalPreview}>
-                    <img
-                      src={(done[0] && done[0].url) || item.previewUrl}
-                      alt={item.file.name}
-                    />
-                  </div>
+                  {isWatermark && done.length > 0 ? (
+                    <div class={style.compare}>
+                      <img
+                        class={style.compareImg}
+                        src={done[0]!.url}
+                        alt="after"
+                      />
+                      <img
+                        class={style.compareBefore}
+                        src={item.previewUrl}
+                        alt="before"
+                        style={{
+                          clipPath: `inset(0 ${100 - comparePct}% 0 0)`,
+                        }}
+                      />
+                      <div
+                        class={style.compareHandle}
+                        style={{ left: `${comparePct}%` }}
+                      >
+                        <span class={style.compareBadge}>Before</span>
+                      </div>
+                      <span class={`${style.compareBadge} ${style.afterBadge}`}>
+                        After
+                      </span>
+                      <input
+                        class={style.compareRange}
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={comparePct}
+                        onInput={this.onCompareChange}
+                        aria-label="Before / after slider"
+                      />
+                    </div>
+                  ) : (
+                    <div class={style.modalPreview}>
+                      <img
+                        src={(done[0] && done[0].url) || item.previewUrl}
+                        alt={item.file.name}
+                      />
+                    </div>
+                  )}
                   <div class={style.modalFormats}>
                     <a
                       class={style.modalOrig}
@@ -564,8 +722,7 @@ export default class Batch extends Component<Props, State> {
                         href={r.url}
                         download={r.file?.name}
                       >
-                        {encoderMap[r.format].meta.label} ·{' '}
-                        {r.file ? prettyBytes(r.file.size) : ''}
+                        {r.label} · {r.file ? prettyBytes(r.file.size) : ''}
                       </a>
                     ))}
                   </div>

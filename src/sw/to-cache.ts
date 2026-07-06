@@ -15,7 +15,7 @@ function subtractSets<T extends any>(set1: Set<T>, set2: Set<T>): Set<T> {
 // Initial app stuff
 import * as initialApp from 'entry-data:client/initial-app';
 import swUrl from 'service-worker:sw';
-import * as compress from 'entry-data:client/lazy-app/Compress';
+import * as tool from 'entry-data:client/lazy-app/Tool';
 import * as swBridge from 'entry-data:client/lazy-app/sw-bridge';
 
 // The processors and codecs
@@ -53,8 +53,8 @@ export function shouldCacheDynamically(url: string) {
 }
 
 let initialJs = new Set([
-  compress.main,
-  ...compress.deps,
+  tool.main,
+  ...tool.deps,
   swBridge.main,
   ...swBridge.deps,
 ]);

@@ -2,12 +2,10 @@
   "buildCommand": "npm run build",
   "outputDirectory": "build",
   "cleanUrls": true,
-  "redirects": [
-    { "source": "/editor", "destination": "/", "permanent": false }
-  ],
   "rewrites": [
-    { "source": "/watermark", "destination": "/" },
-    { "source": "/batch", "destination": "/" }
+    { "source": "/editor", "destination": "/index.html" },
+    { "source": "/watermark", "destination": "/index.html" },
+    { "source": "/batch", "destination": "/index.html" }
   ],
   "headers": [
     {

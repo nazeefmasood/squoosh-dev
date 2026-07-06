@@ -11,16 +11,8 @@ import 'file-drop-element';
 import 'shared/custom-els/snack-bar';
 import Intro from 'shared/prerendered-app/Intro';
 import 'shared/custom-els/loading-spinner';
+import Tool, { ToolMode } from 'client/lazy-app/Tool';
 
-const ROUTE_EDITOR = '/editor';
-const ROUTE_BATCH = '/batch';
-const ROUTE_WATERMARK = '/watermark';
-
-type Tool = 'compress' | 'watermark';
-
-const compressPromise = import('client/lazy-app/Compress');
-const batchPromise = import('client/lazy-app/Batch');
-const watermarkPromise = import('client/lazy-app/Watermark');
 const swBridgePromise = import('client/lazy-app/sw-bridge');
 
 function back() {
@@ -31,15 +23,28 @@ interface Props {}
 
 interface State {
   awaitingShareTarget: boolean;
-  activeTool: Tool;
-  file?: File;
-  files?: File[];
+  activeTool: ToolMode;
+  files: File[];
   isEditorOpen: Boolean;
-  isBatchOpen: Boolean;
-  isWatermarkOpen: Boolean;
-  Compress?: typeof import('client/lazy-app/Compress').default;
-  Batch?: typeof import('client/lazy-app/Batch').default;
-  Watermark?: typeof import('client/lazy-app/Watermark').default;
+  Tool?: typeof import('client/lazy-app/Tool').default;
+}
+
+function modeFromQuery(): ToolMode {
+  try {
+    const t = new URL(location.href).searchParams.get('tool');
+    return t === 'watermark' ? 'watermark' : 'compress';
+  } catch {
+    return 'compress';
+  }
+}
+
+/** Map any legacy route to (editor open?, mode). */
+function routeInfo(): { open: boolean; mode: ToolMode } {
+  const p = location.pathname;
+  if (p === '/watermark') return { open: true, mode: 'watermark' };
+  if (p === '/batch') return { open: true, mode: 'compress' };
+  if (p === '/editor') return { open: true, mode: modeFromQuery() };
+  return { open: false, mode: modeFromQuery() };
 }
 
 export default class App extends Component<Props, State> {
@@ -47,15 +52,10 @@ export default class App extends Component<Props, State> {
     awaitingShareTarget: new URL(location.href).searchParams.has(
       'share-target',
     ),
-    activeTool: 'compress',
-    isEditorOpen: false,
-    isBatchOpen: false,
-    isWatermarkOpen: false,
-    file: undefined,
-    files: undefined,
-    Compress: undefined,
-    Batch: undefined,
-    Watermark: undefined,
+    activeTool: routeInfo().mode,
+    files: [],
+    isEditorOpen: routeInfo().open,
+    Tool: undefined,
   };
 
   snackbar?: SnackBarElement;
@@ -63,57 +63,28 @@ export default class App extends Component<Props, State> {
   constructor() {
     super();
 
-    compressPromise
+    import('client/lazy-app/Tool')
       .then((module) => {
-        this.setState({ Compress: module.default });
+        this.setState({ Tool: module.default });
       })
       .catch(() => {
         this.showSnack('Failed to load app');
-      });
-
-    batchPromise
-      .then((module) => {
-        this.setState({ Batch: module.default });
-      })
-      .catch(() => {
-        this.showSnack('Failed to load batch tool');
-      });
-
-    watermarkPromise
-      .then((module) => {
-        this.setState({ Watermark: module.default });
-      })
-      .catch(() => {
-        this.showSnack('Failed to load watermark tool');
       });
 
     swBridgePromise.then(async ({ offliner, getSharedImage }) => {
       offliner(this.showSnack);
       if (!this.state.awaitingShareTarget) return;
       const file = await getSharedImage();
-      // Remove the ?share-target from the URL
       history.replaceState('', '', '/');
       this.openEditor();
-      this.setState({ file, awaitingShareTarget: false });
+      this.setState({ files: [file], awaitingShareTarget: false });
     });
 
-    // Since iOS 10, Apple tries to prevent disabling pinch-zoom. This is great in theory, but
-    // really breaks things on Squoosh, as you can easily end up zooming the UI when you mean to
-    // zoom the image. Once you've done this, it's really difficult to undo. Anyway, this seems to
-    // prevent it.
     document.body.addEventListener('gesturestart', (event: any) => {
       event.preventDefault();
     });
 
     window.addEventListener('popstate', this.onPopState);
-
-    // Open the right tool on a direct/deep-linked load (e.g. /watermark).
-    const initialPath = location.pathname;
-    if (initialPath === ROUTE_WATERMARK) {
-      this.setState({ isWatermarkOpen: true, files: [] });
-    } else if (initialPath === ROUTE_BATCH) {
-      this.setState({ isBatchOpen: true, files: [] });
-    }
   }
 
   private onFileDrop = ({ files }: FileDropEvent) => {
@@ -122,27 +93,13 @@ export default class App extends Component<Props, State> {
   };
 
   private handleFiles = (files: File[]) => {
-    if (files.length === 0) return;
-    if (this.state.activeTool === 'watermark') {
-      this.openWatermark();
-      this.setState({ files, file: undefined });
-      return;
-    }
-    if (files.length === 1) {
-      this.openEditor();
-      this.setState({ file: files[0], files: undefined });
-    } else {
-      this.openBatch();
-      this.setState({ files, file: undefined });
-    }
-  };
-
-  private onIntroPickFile = (file: File) => {
+    const imgs = files.filter((f) => f.type.startsWith('image/'));
+    if (!imgs.length) return;
     this.openEditor();
-    this.setState({ file });
+    this.setState({ files: imgs });
   };
 
-  private setActiveTool = (tool: Tool) => {
+  private setActiveTool = (tool: ToolMode) => {
     this.setState({ activeTool: tool });
   };
 
@@ -155,101 +112,51 @@ export default class App extends Component<Props, State> {
   };
 
   private onPopState = () => {
-    this.setState({
-      isEditorOpen: location.pathname === ROUTE_EDITOR,
-      isBatchOpen: location.pathname === ROUTE_BATCH,
-      isWatermarkOpen: location.pathname === ROUTE_WATERMARK,
-    });
+    const info = routeInfo();
+    this.setState({ isEditorOpen: info.open, activeTool: info.mode });
   };
 
-  private openEditor = () => {
-    if (this.state.isEditorOpen) return;
-    // Change path, but preserve query string.
-    const editorURL = new URL(location.href);
-    editorURL.pathname = ROUTE_EDITOR;
-    history.pushState(null, '', editorURL.href);
-    this.setState({
-      isEditorOpen: true,
-      isBatchOpen: false,
-      isWatermarkOpen: false,
-    });
+  private openEditor = (tool?: ToolMode) => {
+    const url = new URL(location.href);
+    url.pathname = '/editor';
+    if (tool) url.searchParams.set('tool', tool);
+    else url.searchParams.delete('tool');
+    history.pushState(null, '', url.href);
+    this.setState({ isEditorOpen: true });
   };
 
-  private openBatch = () => {
-    if (this.state.isBatchOpen) return;
-    const batchURL = new URL(location.href);
-    batchURL.pathname = ROUTE_BATCH;
-    history.pushState(null, '', batchURL.href);
-    this.setState({
-      isBatchOpen: true,
-      isEditorOpen: false,
-      isWatermarkOpen: false,
-    });
-  };
-
-  private openWatermark = () => {
-    if (this.state.isWatermarkOpen) return;
-    const wmURL = new URL(location.href);
-    wmURL.pathname = ROUTE_WATERMARK;
-    history.pushState(null, '', wmURL.href);
-    this.setState({
-      isWatermarkOpen: true,
-      isEditorOpen: false,
-      isBatchOpen: false,
-    });
+  // Used by the editor's back button / nav links.
+  private goHome = () => {
+    history.pushState(null, '', '/');
+    this.setState({ isEditorOpen: false });
   };
 
   render(
     {}: Props,
-    {
-      activeTool,
-      file,
-      files,
-      isEditorOpen,
-      isBatchOpen,
-      isWatermarkOpen,
-      Compress,
-      Batch,
-      Watermark,
-      awaitingShareTarget,
-    }: State,
+    { activeTool, files, isEditorOpen, Tool, awaitingShareTarget }: State,
   ) {
-    const showSpinner =
-      awaitingShareTarget ||
-      (isEditorOpen && !Compress) ||
-      (isBatchOpen && !Batch) ||
-      (isWatermarkOpen && !Watermark);
+    const showSpinner = awaitingShareTarget || (isEditorOpen && !Tool);
 
     return (
       <div class={style.app}>
         <file-drop onfiledrop={this.onFileDrop} class={style.drop}>
           {showSpinner ? (
             <loading-spinner class={style.appLoader} />
-          ) : isBatchOpen ? (
-            Batch && (
-              <Batch
-                files={files ?? []}
-                showSnack={this.showSnack}
-                onBack={back}
-              />
-            )
-          ) : isWatermarkOpen ? (
-            Watermark && (
-              <Watermark
-                files={files ?? []}
-                showSnack={this.showSnack}
-                onBack={back}
-              />
-            )
           ) : isEditorOpen ? (
-            Compress && (
-              <Compress file={file!} showSnack={this.showSnack} onBack={back} />
+            Tool && (
+              <Tool
+                files={files}
+                mode={activeTool}
+                onModeChange={this.setActiveTool}
+                onBack={this.goHome}
+                showSnack={this.showSnack}
+              />
             )
           ) : (
             <Intro
               tool={activeTool}
               onToolChange={this.setActiveTool}
-              onFile={this.onIntroPickFile}
+              onOpenTool={(t) => this.openEditor(t)}
               onFiles={this.handleFiles}
               showSnack={this.showSnack}
             />
