@@ -1,2 +1,1 @@
-/codecs/**/*.js linguist-generated -diff
-/codecs/*/pkg*/*.d.ts linguist-generated
+src/client/lazy-app/BgRemove/models/*.onnx filter=lfs diff=lfs merge=lfs -text
