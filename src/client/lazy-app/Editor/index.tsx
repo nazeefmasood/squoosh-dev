@@ -520,7 +520,7 @@ export default class Editor extends Component<Props, State> {
         icon: (
           <svg viewBox="0 0 24 24" fill="none">
             <path
-              d="M3 3h7v7M21 21h-7v-7M10 3 3 3v7M14 21h7v-7"
+              d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"
               stroke="currentColor"
               stroke-width="2"
               stroke-linecap="round"
@@ -535,7 +535,14 @@ export default class Editor extends Component<Props, State> {
         icon: (
           <svg viewBox="0 0 24 24" fill="none">
             <path
-              d="M21 12a9 9 0 1 1-2.64-6.36M21 3v4h-4"
+              d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M21 3v5h-5"
               stroke="currentColor"
               stroke-width="2"
               stroke-linecap="round"
