@@ -70,6 +70,8 @@ interface State {
   comparePct: number;
   /** Background-remover model download progress (first load only). */
   modelDl?: { loaded: number; total: number };
+  /** True once the model is downloaded and ORT is building the session. */
+  modelPreparing?: boolean;
 }
 
 /** Files above this size get a heads-up that processing may be slow. */
@@ -459,11 +461,16 @@ export default class Tool extends Component<Props, State> {
               error: undefined,
             });
             try {
-              await preloadModel((loaded, total) =>
-                this.setState({ modelDl: { loaded, total } }),
-              );
+              await preloadModel((loaded, total) => {
+                if (total > 0 && loaded >= total) {
+                  // Download done — ORT is now building the session.
+                  this.setState({ modelDl: undefined, modelPreparing: true });
+                } else {
+                  this.setState({ modelDl: { loaded, total } });
+                }
+              });
               this.modelWarmed = true;
-              this.setState({ modelDl: undefined });
+              this.setState({ modelDl: undefined, modelPreparing: false });
             } catch {
               this.putResult(item.id, 'cutout', {
                 status: 'error',
@@ -595,6 +602,7 @@ export default class Tool extends Component<Props, State> {
       modalId,
       comparePct,
       modelDl,
+      modelPreparing,
     }: State,
   ) {
     const isWatermark = mode === 'watermark';
@@ -796,8 +804,20 @@ export default class Tool extends Component<Props, State> {
                   </label>
                 )}
               <div class={style.spacer} />
-              <button class={style.btnAdd} onClick={this.onAddFilesClick}>
-                + Add images
+              <button
+                class={style.btnAdd}
+                onClick={this.onAddFilesClick}
+                aria-label="Add images"
+                title="Add images"
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M12 5v14M5 12h14"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
               </button>
               {items.length > 0 && !processing && (
                 <button class={style.btnGhost} onClick={this.clearAll}>
@@ -832,6 +852,11 @@ export default class Tool extends Component<Props, State> {
                           }}
                         />
                       </span>
+                    </span>
+                  ) : modelPreparing ? (
+                    <span class={style.progress}>
+                      <span class={style.spinner} aria-hidden="true" />
+                      Preparing model…
                     </span>
                   ) : (
                     <span class={style.progress}>

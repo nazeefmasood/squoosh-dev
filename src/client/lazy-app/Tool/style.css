@@ -311,6 +311,19 @@
   background: transparent;
   color: var(--text);
   border-color: var(--line-strong);
+  /* Icon-only: square, centered + glyph. */
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+}
+
+.btnAdd svg {
+  width: 20px;
+  height: 20px;
 }
 
 .btnAdd:hover {
