@@ -82,33 +82,30 @@ export function preloadModel(
     'ort-wasm-simd-threaded.asyncify.wasm': wasmAsyncifyUrl,
     'ort-wasm-simd-threaded.jspi.wasm': wasmJspiUrl,
   };
-  ort.env.wasm.numThreads = navigator.hardwareConcurrency
-    ? Math.min(4, navigator.hardwareConcurrency)
-    : 1;
+  // Single-threaded WASM. ORT-Web's threaded build can deadlock inside
+  // InferenceSession.create during pthread-pool init in bundled/COEP setups,
+  // which presents as a permanent "Preparing model…" hang. Single-threaded
+  // reliably initializes; a 44 MB int8 model still runs in a few seconds.
+  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.proxy = false;
 
   sessionPromise = (async () => {
     // Download the model with progress, then build the session from the buffer.
     const modelBytes = await fetchWithProgress(modelUrl, onProgress);
-    // Default to the WASM-threads backend: it's reliable on RMBG-1.4, whereas
-    // ORT-Web's WebGPU path can stall during session creation on large U-Nets.
-    // WebGPU is attempted only as an opt-in via the GPU env below.
-    const wantGpu = false;
-    const providers = wantGpu ? ['webgpu', 'wasm'] : ['wasm'];
+    const opts = {
+      executionProviders: ['wasm'],
+      // 'basic' avoids occasional hangs in the ORT graph optimizer on
+      // quantized U-Nets; cost is negligible for inference.
+      graphOptimizationLevel: 'basic' as const,
+    };
     try {
-      const s = await ort.InferenceSession.create(modelBytes, {
-        executionProviders: providers,
-        graphOptimizationLevel: 'all',
-      });
-      usingGpu = wantGpu;
-      return s;
+      return await ort.InferenceSession.create(modelBytes, opts);
     } catch {
-      // Last-resort retry with the plain WASM backend.
-      const s = await ort.InferenceSession.create(modelBytes, {
-        executionProviders: ['wasm'],
-        graphOptimizationLevel: 'all',
+      // Last-resort retry with optimizations fully disabled.
+      return await ort.InferenceSession.create(modelBytes, {
+        ...opts,
+        graphOptimizationLevel: 'disabled' as const,
       });
-      usingGpu = false;
-      return s;
     }
   })();
   return sessionPromise;
