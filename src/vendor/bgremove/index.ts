@@ -1,7 +1,7 @@
 /**
  * Background remover — ONNX Runtime Web + RMBG-1.4.
  *
- * Runs entirely in the browser. The model (~176 MB fp32) and the ORT wasm
+ * Runs entirely in the browser. The model (~44 MB int8) and the ORT wasm
  * runtime are self-hosted as same-origin assets (COEP blocks CDN fetches).
  * Inference prefers WebGPU (fast) and falls back to multi-threaded WASM,
  * which works because the app is cross-origin isolated (SharedArrayBuffer

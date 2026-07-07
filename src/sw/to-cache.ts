@@ -51,7 +51,7 @@ import * as wp2Enc from 'entry-data:codecs/wp2/enc/wp2_enc';
 export function shouldCacheDynamically(url: string) {
   if (url.startsWith('/c/demo-')) return true;
   // Background-remover model + ONNX runtime wasm: large, rarely-changing
-  // assets. Cache on first use so the (~168 MB) model downloads once per
+  // assets. Cache on first use so the (~44 MB) model downloads once per
   // visitor, then loads instantly and works offline.
   if (url.startsWith('/c/')) {
     const file = url.slice(url.lastIndexOf('/') + 1);

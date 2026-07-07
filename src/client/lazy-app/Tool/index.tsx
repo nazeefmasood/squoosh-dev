@@ -746,7 +746,7 @@ export default class Tool extends Component<Props, State> {
               : isMetadata
               ? 'Drop images and Smoosh removes EXIF, GPS, camera and timestamp data — losslessly for JPEG & PNG, so quality is untouched. See exactly what was removed. Fully private, batch supported.'
               : isBgRemove
-              ? 'Drop images and Smoosh removes the background using the RMBG-1.4 model running locally via WebAssembly. The model (~176 MB) downloads once on first use, then results are instant. Nothing is uploaded.'
+              ? 'Drop images and Smoosh removes the background using the RMBG-1.4 model running locally via WebAssembly. The model (~44 MB) downloads once on first use, then results are fast. Nothing is uploaded.'
               : 'Drop images and export each to a single format — or to all formats at once. Everything runs locally in your browser.'}
           </p>
 
