@@ -8,7 +8,7 @@ import { decodeImage, compressImage } from '../pipeline';
 import { encoderMap, EncoderType, EncoderState } from '../feature-meta';
 import { removeWatermarkFromImage } from 'vendor/gwm';
 import { readMeta, stripMeta, MetaResult } from 'vendor/exif';
-import { removeBackground, preloadModel, isUsingGpu } from 'vendor/bgremove';
+import { removeBackground, preloadModel } from 'vendor/bgremove';
 import type SnackBarElement from 'shared/custom-els/snack-bar';
 
 export type ToolMode =

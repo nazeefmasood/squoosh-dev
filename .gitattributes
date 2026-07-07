@@ -1,1 +1,2 @@
 src/client/lazy-app/BgRemove/models/*.onnx filter=lfs diff=lfs merge=lfs -text
+src/vendor/bgremove/wasm/*.wasm filter=lfs diff=lfs merge=lfs -text

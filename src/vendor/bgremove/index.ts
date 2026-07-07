@@ -13,10 +13,12 @@
  */
 import * as ort from 'onnxruntime-web';
 
-// Self-hosted assets (emitted same-origin by the url: rollup plugin).
+// Self-hosted assets (emitted same-origin by the url: rollup plugin). The wasm
+// files are vendored locally because onnxruntime-web's package "exports" map
+// blocks deep /dist imports under bundlers.
 import modelUrl from 'url:client/lazy-app/BgRemove/models/rmbg-1.4.onnx';
-import wasmCoreUrl from 'url:onnxruntime-web/dist/ort-wasm-simd-threaded.wasm';
-import wasmJsepUrl from 'url:onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm';
+import wasmCoreUrl from 'url:vendor/bgremove/wasm/ort-wasm-simd-threaded.wasm';
+import wasmJsepUrl from 'url:vendor/bgremove/wasm/ort-wasm-simd-threaded.jsep.wasm';
 
 const MODEL_SIZE = 1024;
 const MEAN = [0.485, 0.456, 0.406];
