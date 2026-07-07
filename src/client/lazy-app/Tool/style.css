@@ -57,12 +57,13 @@
 
 .markImg {
   display: block;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
 }
 
 .wordmarkText {
   font-size: var(--text-subheading);
+  line-height: 1;
   font-weight: var(--fw-regular);
   letter-spacing: -0.02em;
   background: var(--brand-gradient);

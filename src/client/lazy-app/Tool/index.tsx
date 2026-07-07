@@ -469,8 +469,8 @@ export default class Tool extends Component<Props, State> {
               class={style.markImg}
               src={logoIcon}
               alt=""
-              width="28"
-              height="28"
+              width="34"
+              height="34"
             />
             <span class={style.wordmarkText}>Smoosh</span>
           </a>

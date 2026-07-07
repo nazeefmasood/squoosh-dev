@@ -180,8 +180,8 @@ export default class Intro extends Component<Props, State> {
               class={style.markImg}
               src={logoIcon}
               alt=""
-              width="28"
-              height="28"
+              width="36"
+              height="36"
             />
             <span class={style.wordmarkText}>Smoosh</span>
           </a>
