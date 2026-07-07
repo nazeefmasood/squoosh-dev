@@ -39,6 +39,7 @@ function modeFromQuery(): ToolMode {
     if (t === 'edit') return 'edit';
     if (t === 'metadata') return 'metadata';
     if (t === 'favicon') return 'favicon';
+    if (t === 'bgremove') return 'bgremove';
     return 'compress';
   } catch {
     return 'compress';

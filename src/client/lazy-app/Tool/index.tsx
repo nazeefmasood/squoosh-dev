@@ -8,6 +8,7 @@ import { decodeImage, compressImage } from '../pipeline';
 import { encoderMap, EncoderType, EncoderState } from '../feature-meta';
 import { removeWatermarkFromImage } from 'vendor/gwm';
 import { readMeta, stripMeta, MetaResult } from 'vendor/exif';
+import { removeBackground, preloadModel, isUsingGpu } from 'vendor/bgremove';
 import type SnackBarElement from 'shared/custom-els/snack-bar';
 
 export type ToolMode =
@@ -15,7 +16,8 @@ export type ToolMode =
   | 'watermark'
   | 'edit'
   | 'metadata'
-  | 'favicon';
+  | 'favicon'
+  | 'bgremove';
 
 interface Props {
   files: File[];
@@ -136,6 +138,7 @@ function encoderForFile(file: File): EncoderType {
 function labelForKey(key: string): string {
   if (key === 'cleaned') return 'Cleaned';
   if (key === 'stripped') return 'Stripped';
+  if (key === 'cutout') return 'Cutout';
   return encoderMap[key as EncoderType].meta.label;
 }
 
@@ -204,6 +207,9 @@ function targetsFor(
   if (mode === 'metadata') {
     return [{ key: 'stripped', label: 'Stripped', status: 'pending' }];
   }
+  if (mode === 'bgremove') {
+    return [{ key: 'cutout', label: 'Cutout', status: 'pending' }];
+  }
   const formats = subMode === 'all' ? ALL_FORMATS : [encoderType];
   return formats.map((f) => ({
     key: f,
@@ -226,6 +232,7 @@ export default class Tool extends Component<Props, State> {
   private workerBridge = new WorkerBridge();
   private abortController?: AbortController;
   private fileInput?: HTMLInputElement;
+  private modelWarmed = false;
 
   componentDidUpdate(prevProps: Props) {
     // Clearing results when the tool mode switches keeps the UI consistent.
@@ -442,6 +449,62 @@ export default class Tool extends Component<Props, State> {
           continue;
         }
 
+        if (this.props.mode === 'bgremove') {
+          // Warm the model once (first image pays the load cost).
+          if (!this.modelWarmed) {
+            this.putResult(item.id, 'cutout', {
+              status: 'processing',
+              error: undefined,
+            });
+            try {
+              await preloadModel();
+              this.modelWarmed = true;
+            } catch {
+              this.putResult(item.id, 'cutout', {
+                status: 'error',
+                error: 'Model failed',
+              });
+              this.setState((p) => ({ processedCount: p.processedCount + 1 }));
+              continue;
+            }
+          } else {
+            this.putResult(item.id, 'cutout', {
+              status: 'processing',
+              error: undefined,
+            });
+          }
+          try {
+            const src = await decodeImage(signal, item.file, this.workerBridge);
+            const { imageData } = await removeBackground(src);
+            // Encode cutout as PNG (preserves transparency).
+            const enc = encoderMap['oxiPNG'];
+            const resultFile = await compressImage(
+              signal,
+              imageData,
+              {
+                type: 'oxiPNG',
+                options: { ...(enc.meta as any).defaultOptions },
+              } as EncoderState,
+              seoName(item.file.name).replace(/\.[^.]+$/, '') + '-cutout.png',
+              this.workerBridge,
+            );
+            const url = URL.createObjectURL(resultFile);
+            this.putResult(item.id, 'cutout', {
+              status: 'done',
+              file: resultFile,
+              url,
+            });
+          } catch (err) {
+            const msg =
+              err instanceof Error && err.name === 'AbortError'
+                ? 'Cancelled'
+                : 'Failed';
+            this.putResult(item.id, 'cutout', { status: 'error', error: msg });
+          }
+          this.setState((p) => ({ processedCount: p.processedCount + 1 }));
+          continue;
+        }
+
         // compress: decode once, encode each format
         let imageData: ImageData;
         try {
@@ -530,6 +593,7 @@ export default class Tool extends Component<Props, State> {
   ) {
     const isWatermark = mode === 'watermark';
     const isMetadata = mode === 'metadata';
+    const isBgRemove = mode === 'bgremove';
     const doneCount = items.reduce(
       (s, i) => s + i.results.filter((r) => r.status === 'done').length,
       0,
@@ -611,6 +675,16 @@ export default class Tool extends Component<Props, State> {
               EXIF strip
             </button>
             <button
+              class={`${style.tab}${
+                mode === 'bgremove' ? ' ' + style.tabActive : ''
+              }`}
+              role="tab"
+              aria-selected={mode === 'bgremove'}
+              onClick={() => onModeChange('bgremove')}
+            >
+              Background remover
+            </button>
+            <button
               class={style.navLink}
               onClick={onBack}
               aria-label="Back to home"
@@ -640,6 +714,11 @@ export default class Tool extends Component<Props, State> {
                 Strip <span class={style.accent}>EXIF & metadata</span>, keep
                 every pixel.
               </Fragment>
+            ) : isBgRemove ? (
+              <Fragment>
+                Remove <span class={style.accent}>backgrounds</span>, right in
+                your browser.
+              </Fragment>
             ) : (
               <Fragment>
                 Compress into <span class={style.accent}>any format</span>, all
@@ -652,6 +731,8 @@ export default class Tool extends Component<Props, State> {
               ? 'Drop your Gemini-generated images and Smoosh cleanly removes the watermark using reverse alpha blending — mathematically exact, fully private, batch supported.'
               : isMetadata
               ? 'Drop images and Smoosh removes EXIF, GPS, camera and timestamp data — losslessly for JPEG & PNG, so quality is untouched. See exactly what was removed. Fully private, batch supported.'
+              : isBgRemove
+              ? 'Drop images and Smoosh removes the background using the RMBG-1.4 model running locally via WebAssembly. The model (~176 MB) downloads once on first use, then results are instant. Nothing is uploaded.'
               : 'Drop images and export each to a single format — or to all formats at once. Everything runs locally in your browser.'}
           </p>
 
@@ -734,6 +815,8 @@ export default class Tool extends Component<Props, State> {
                     ? `Remove watermarks (${items.length})`
                     : isMetadata
                     ? `Strip metadata (${items.length})`
+                    : isBgRemove
+                    ? `Remove backgrounds (${items.length})`
                     : subMode === 'all'
                     ? `Convert to all formats (${items.length})`
                     : `Process all (${items.length})`}
@@ -774,6 +857,8 @@ export default class Tool extends Component<Props, State> {
                   ? 'Drop Gemini-generated images'
                   : isMetadata
                   ? 'Drop images to scrub'
+                  : isBgRemove
+                  ? 'Drop images to cut out'
                   : 'Drop images to compress'}
               </div>
               <div class={style.dropHint}>

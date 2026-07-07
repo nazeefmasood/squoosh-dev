@@ -29,7 +29,13 @@ async function getImageClipboardItem(
   }
 }
 
-type Tool = 'compress' | 'watermark' | 'edit' | 'metadata' | 'favicon';
+type Tool =
+  | 'compress'
+  | 'watermark'
+  | 'edit'
+  | 'metadata'
+  | 'favicon'
+  | 'bgremove';
 
 interface Props {
   tool?: Tool;
@@ -245,6 +251,11 @@ export default class Intro extends Component<Props, State> {
                 <span class={style.accent}>Text, emoji, image</span> — one
                 click.
               </Fragment>
+            ) : tool === 'bgremove' ? (
+              <Fragment>
+                Remove backgrounds.{' '}
+                <span class={style.accent}>On-device AI,</span> fully private.
+              </Fragment>
             ) : (
               <Fragment>
                 Compress images.{' '}
@@ -261,6 +272,8 @@ export default class Intro extends Component<Props, State> {
               ? 'Smoosh removes EXIF, GPS, camera and timestamp data from your images — losslessly for JPEG and PNG, so quality is untouched. See exactly what gets removed. Fully private, batch supported.'
               : tool === 'favicon'
               ? 'Turn text, an emoji or an image into a complete favicon set — .ico, PNGs, apple-touch-icon, Android icons and webmanifest — zipped and ready, with the HTML snippet to paste. Runs locally.'
+              : tool === 'bgremove'
+              ? 'Smoosh removes image backgrounds with the RMBG-1.4 model running locally via WebAssembly — no uploads, fully private. The model downloads once, then cutouts are fast. Batch supported.'
               : 'Smoosh shrinks and converts images with industry codecs — right in your browser. Your files never leave your device. Compare codecs side by side and batch a whole folder at once.'}
           </p>
 
@@ -315,6 +328,16 @@ export default class Intro extends Component<Props, State> {
                 onClick={() => onToolChange('favicon')}
               >
                 Favicon
+              </button>
+              <button
+                class={`${style.toolTab}${
+                  tool === 'bgremove' ? ' ' + style.toolTabActive : ''
+                }`}
+                role="tab"
+                aria-selected={tool === 'bgremove'}
+                onClick={() => onToolChange('bgremove')}
+              >
+                BG remover
               </button>
             </div>
           )}
@@ -512,6 +535,20 @@ export default class Intro extends Component<Props, State> {
                   }
                 >
                   Favicon generator
+                </a>
+                <a
+                  class={style.footerLink}
+                  href="/editor?tool=bgremove"
+                  onClick={
+                    onOpenTool
+                      ? (e) => {
+                          e.preventDefault();
+                          onOpenTool('bgremove');
+                        }
+                      : undefined
+                  }
+                >
+                  Background remover
                 </a>
               </div>
               <div class={style.footerCol}>
