@@ -2,7 +2,7 @@ import { h, Component, Fragment } from 'preact';
 
 import * as style from './style.css';
 import 'add-css:./style.css';
-import logoIcon from 'url:static-build/assets/brand/smoosh-icon.png';
+import ToolNav from '../ToolNav';
 import WorkerBridge from '../worker-bridge';
 import { decodeImage, compressImage } from '../pipeline';
 import { encoderMap, EncoderType, EncoderState } from '../feature-meta';
@@ -638,83 +638,7 @@ export default class Tool extends Component<Props, State> {
           onChange={this.onFileChange}
         />
 
-        <nav class={style.nav}>
-          <a class={style.wordmark} href="/" onClick={onBack}>
-            <img
-              class={style.markImg}
-              src={logoIcon}
-              alt=""
-              width="34"
-              height="34"
-            />
-            <span class={style.wordmarkText}>Smoosh</span>
-          </a>
-          <div class={style.tabs} role="tablist" aria-label="Tool">
-            <button
-              class={style.tab}
-              role="tab"
-              aria-selected={false}
-              onClick={() => onModeChange('edit')}
-            >
-              Edit
-            </button>
-            <button
-              class={`${style.tab}${
-                mode === 'compress' ? ' ' + style.tabActive : ''
-              }`}
-              role="tab"
-              aria-selected={mode === 'compress'}
-              onClick={() => onModeChange('compress')}
-            >
-              Compress
-            </button>
-            <button
-              class={`${style.tab}${
-                mode === 'watermark' ? ' ' + style.tabActive : ''
-              }`}
-              role="tab"
-              aria-selected={mode === 'watermark'}
-              onClick={() => onModeChange('watermark')}
-            >
-              Watermark remover
-            </button>
-            <button
-              class={`${style.tab}${
-                mode === 'metadata' ? ' ' + style.tabActive : ''
-              }`}
-              role="tab"
-              aria-selected={mode === 'metadata'}
-              onClick={() => onModeChange('metadata')}
-            >
-              EXIF strip
-            </button>
-            <button
-              class={`${style.tab}${
-                mode === 'bgremove' ? ' ' + style.tabActive : ''
-              }`}
-              role="tab"
-              aria-selected={mode === 'bgremove'}
-              onClick={() => onModeChange('bgremove')}
-            >
-              Background remover
-            </button>
-            <button
-              class={style.navLink}
-              onClick={onBack}
-              aria-label="Back to home"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M15 6l-6 6 6 6"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </button>
-          </div>
-        </nav>
+        <ToolNav active={mode} onModeChange={onModeChange} onBack={onBack} />
 
         <section class={style.hero}>
           <h1>
@@ -1017,6 +941,11 @@ export default class Tool extends Component<Props, State> {
                             : 'Watermark removed'}
                         </div>
                       )}
+                      {isBgRemove && item.results[0]?.status === 'done' && (
+                        <div class={style.detected}>
+                          Background removed — tap thumbnail to compare
+                        </div>
+                      )}
                       {isMetadata && item.meta && (
                         <div class={style.metaBox}>
                           {item.meta.fields.length === 0 ? (
@@ -1102,8 +1031,12 @@ export default class Tool extends Component<Props, State> {
                       ✕
                     </button>
                   </div>
-                  {isWatermark && done.length > 0 ? (
-                    <div class={style.compare}>
+                  {(isWatermark || isBgRemove) && done.length > 0 ? (
+                    <div
+                      class={`${style.compare}${
+                        isBgRemove ? ' ' + style.compareChecker : ''
+                      }`}
+                    >
                       <img
                         class={style.compareImg}
                         src={done[0]!.url}

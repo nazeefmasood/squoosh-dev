@@ -112,6 +112,12 @@
   flex: 1 1 auto;
   display: flex;
   min-height: 0;
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto var(--spacing-32);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
 }
 
 .previewCol {

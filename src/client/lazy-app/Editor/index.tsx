@@ -2,7 +2,7 @@ import { h, Component, Fragment } from 'preact';
 
 import * as style from './style.css';
 import 'add-css:./style.css';
-import logoIcon from 'url:static-build/assets/brand/smoosh-icon.png';
+import ToolNav from '../ToolNav';
 import WorkerBridge from '../worker-bridge';
 import { compressImage } from '../pipeline';
 import { encoderMap, EncoderType, EncoderState } from '../feature-meta';
@@ -580,63 +580,7 @@ export default class Editor extends Component<Props, State> {
           class={style.hide}
           onChange={this.onFileChange}
         />
-        <nav class={style.topnav}>
-          <a
-            class={style.wordmark}
-            href="/"
-            onClick={(ev: Event) => {
-              ev.preventDefault();
-              onBack();
-            }}
-          >
-            <img
-              class={style.markImg}
-              src={logoIcon}
-              alt=""
-              width="34"
-              height="34"
-            />
-            <span class={style.wordmarkText}>Smoosh</span>
-          </a>
-          <div class={style.tabs} role="tablist" aria-label="Tool">
-            <button
-              class={`${style.tab} ${style.tabActive}`}
-              role="tab"
-              aria-selected={true}
-            >
-              Edit
-            </button>
-            <button
-              class={style.tab}
-              role="tab"
-              onClick={() => onModeChange('compress')}
-            >
-              Compress
-            </button>
-            <button
-              class={style.tab}
-              role="tab"
-              onClick={() => onModeChange('watermark')}
-            >
-              Watermark remover
-            </button>
-            <button
-              class={style.navLink}
-              onClick={onBack}
-              aria-label="Back to home"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M15 6l-6 6 6 6"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </button>
-          </div>
-        </nav>
+        <ToolNav active="edit" onModeChange={onModeChange} onBack={onBack} />
 
         <div class={style.editor}>
           {/* Left tool rail */}

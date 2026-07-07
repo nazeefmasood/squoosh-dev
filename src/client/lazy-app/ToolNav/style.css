@@ -1,0 +1,114 @@
+/**
+ * Shared tool nav — matches the landing page container exactly: centered to
+ * --maxw with the standard gutter. The pill row scrolls horizontally so a
+ * growing tab set never overflows or wraps.
+ */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-16);
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: var(--spacing-20) var(--gutter);
+  box-sizing: border-box;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-10);
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+
+.markImg {
+  display: block;
+  width: 34px;
+  height: 34px;
+}
+
+.wordmarkText {
+  font-size: var(--text-subheading);
+  line-height: 1;
+  font-weight: var(--fw-regular);
+  letter-spacing: -0.02em;
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Scroll container keeps the pill row on one line without overflowing. */
+.tabsWrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabsWrap::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-6);
+  padding: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  flex: 0 0 auto;
+}
+
+.tab {
+  font-family: var(--font-switzer);
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-regular);
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tabActive,
+.tabActive:hover {
+  background: var(--action-gradient);
+  color: var(--color-ink-black);
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.navLink:hover {
+  border-color: var(--color-ink-black);
+}
+
+.navLink svg {
+  width: 18px;
+  height: 18px;
+}
