@@ -32,7 +32,9 @@ interface State {
 function modeFromQuery(): ToolMode {
   try {
     const t = new URL(location.href).searchParams.get('tool');
-    return t === 'watermark' ? 'watermark' : 'compress';
+    if (t === 'watermark') return 'watermark';
+    if (t === 'resize') return 'resize';
+    return 'compress';
   } catch {
     return 'compress';
   }

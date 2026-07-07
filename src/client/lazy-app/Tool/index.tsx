@@ -9,7 +9,7 @@ import { encoderMap, EncoderType, EncoderState } from '../feature-meta';
 import { removeWatermarkFromImage } from 'vendor/gwm';
 import type SnackBarElement from 'shared/custom-els/snack-bar';
 
-export type ToolMode = 'compress' | 'watermark';
+export type ToolMode = 'compress' | 'watermark' | 'resize';
 
 interface Props {
   files: File[];
@@ -48,6 +48,8 @@ interface Item {
   results: Result[];
 }
 
+type ResizeMode = 'dimensions' | 'percent';
+
 interface State {
   items: Item[];
   subMode: SubMode;
@@ -57,6 +59,12 @@ interface State {
   processedCount: number;
   modalId?: string;
   comparePct: number;
+  // Resize tool options
+  resizeMode: ResizeMode;
+  resizeWidth: number | '';
+  resizeHeight: number | '';
+  resizeLockAspect: boolean;
+  resizePercent: number;
 }
 
 /** Files above this size get a heads-up that processing may be slow. */
@@ -106,6 +114,29 @@ function encoderStateFor(type: EncoderType, quality?: number): EncoderState {
   const options = { ...(encoderMap[type].meta as any).defaultOptions };
   if (quality != null && 'quality' in options) options.quality = quality;
   return { type, options } as EncoderState;
+}
+
+/**
+ * Pick an encoder that preserves the source file's format so tools like
+ * Resize don't silently change JPEGs into PNGs. Unknown types fall back to
+ * lossless PNG.
+ */
+function encoderForFile(file: File): EncoderType {
+  const type = file.type.toLowerCase();
+  const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
+  if (type === 'image/jpeg' || ext === 'jpg' || ext === 'jpeg')
+    return 'mozJPEG';
+  if (type === 'image/webp' || ext === 'webp') return 'webP';
+  if (type === 'image/avif' || ext === 'avif') return 'avif';
+  if (type === 'image/png' || ext === 'png') return 'oxiPNG';
+  return 'browserPNG';
+}
+
+/** Human label for a result key (encoder type, or a tool-specific key). */
+function labelForKey(key: string): string {
+  if (key === 'cleaned') return 'Cleaned';
+  if (key === 'resized') return 'Resized';
+  return encoderMap[key as EncoderType].meta.label;
 }
 
 /** The done result with the smallest output file for an item, if any. */
@@ -170,6 +201,9 @@ function targetsFor(
   if (mode === 'watermark') {
     return [{ key: 'cleaned', label: 'Cleaned', status: 'pending' }];
   }
+  if (mode === 'resize') {
+    return [{ key: 'resized', label: 'Resized', status: 'pending' }];
+  }
   const formats = subMode === 'all' ? ALL_FORMATS : [encoderType];
   return formats.map((f) => ({
     key: f,
@@ -187,6 +221,11 @@ export default class Tool extends Component<Props, State> {
     processing: false,
     processedCount: 0,
     comparePct: 50,
+    resizeMode: 'dimensions',
+    resizeWidth: '',
+    resizeHeight: '',
+    resizeLockAspect: true,
+    resizePercent: 50,
   };
 
   private workerBridge = new WorkerBridge();
@@ -222,6 +261,61 @@ export default class Tool extends Component<Props, State> {
   };
   private onQualityChange = (e: Event) =>
     this.setState({ quality: +(e.target as HTMLInputElement).value });
+
+  private onResizeModeChange = (rm: ResizeMode) => {
+    if (this.state.processing) return;
+    this.setState({ resizeMode: rm });
+  };
+  private onResizeWidthChange = (e: Event) => {
+    const v = (e.target as HTMLInputElement).value;
+    this.setState({ resizeWidth: v === '' ? '' : Math.max(1, Math.round(+v)) });
+  };
+  private onResizeHeightChange = (e: Event) => {
+    const v = (e.target as HTMLInputElement).value;
+    this.setState({
+      resizeHeight: v === '' ? '' : Math.max(1, Math.round(+v)),
+    });
+  };
+  private onResizeLockToggle = () =>
+    this.setState((p) => ({ resizeLockAspect: !p.resizeLockAspect }));
+  private onResizePercentChange = (e: Event) =>
+    this.setState({
+      resizePercent: Math.max(
+        1,
+        Math.round(+(e.target as HTMLInputElement).value),
+      ),
+    });
+
+  /**
+   * Resolve the target size for one image, given its natural dimensions and
+   * the current resize options. Percent scales both axes; dimensions honours
+   * the aspect lock (whichever of width/height is provided drives the other).
+   */
+  private resizeTargetFor(
+    sw: number,
+    sh: number,
+  ): { width: number; height: number } {
+    const s = this.state;
+    if (s.resizeMode === 'percent') {
+      const p = Math.max(1, s.resizePercent) / 100;
+      return {
+        width: Math.max(1, Math.round(sw * p)),
+        height: Math.max(1, Math.round(sh * p)),
+      };
+    }
+    const w = typeof s.resizeWidth === 'number' ? s.resizeWidth : 0;
+    const h = typeof s.resizeHeight === 'number' ? s.resizeHeight : 0;
+    if (s.resizeLockAspect) {
+      if (w && !h)
+        return { width: w, height: Math.max(1, Math.round((w * sh) / sw)) };
+      if (h && !w)
+        return { width: Math.max(1, Math.round((h * sw) / sh)), height: h };
+      if (w && h)
+        return { width: w, height: Math.max(1, Math.round((w * sh) / sw)) };
+      return { width: sw, height: sh };
+    }
+    return { width: w || sw, height: h || sh };
+  }
 
   private addFiles = (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'));
@@ -273,10 +367,7 @@ export default class Tool extends Component<Props, State> {
                     ...i.results,
                     {
                       key,
-                      label:
-                        key === 'cleaned'
-                          ? 'Cleaned'
-                          : encoderMap[key as EncoderType].meta.label,
+                      label: labelForKey(key),
                       status: 'pending',
                       ...patch,
                     },
@@ -341,6 +432,52 @@ export default class Tool extends Component<Props, State> {
               status: 'error',
               error: 'Failed',
             });
+          }
+          this.setState((p) => ({ processedCount: p.processedCount + 1 }));
+          continue;
+        }
+
+        if (this.props.mode === 'resize') {
+          this.putResult(item.id, 'resized', {
+            status: 'processing',
+            error: undefined,
+          });
+          try {
+            const src = await decodeImage(signal, item.file, this.workerBridge);
+            const { width, height } = this.resizeTargetFor(
+              src.width,
+              src.height,
+            );
+            const resized =
+              width === src.width && height === src.height
+                ? src
+                : await this.workerBridge.resize(signal, src, {
+                    width,
+                    height,
+                    method: 'lanczos3',
+                    fitMethod: 'stretch',
+                    premultiply: true,
+                    linearRGB: true,
+                  });
+            const resultFile = await compressImage(
+              signal,
+              resized,
+              encoderStateFor(encoderForFile(item.file), this.state.quality),
+              seoName(item.file.name),
+              this.workerBridge,
+            );
+            const url = URL.createObjectURL(resultFile);
+            this.putResult(item.id, 'resized', {
+              status: 'done',
+              file: resultFile,
+              url,
+            });
+          } catch (err) {
+            const msg =
+              err instanceof Error && err.name === 'AbortError'
+                ? 'Cancelled'
+                : 'Failed';
+            this.putResult(item.id, 'resized', { status: 'error', error: msg });
           }
           this.setState((p) => ({ processedCount: p.processedCount + 1 }));
           continue;
@@ -430,9 +567,15 @@ export default class Tool extends Component<Props, State> {
       processedCount,
       modalId,
       comparePct,
+      resizeMode,
+      resizeWidth,
+      resizeHeight,
+      resizeLockAspect,
+      resizePercent,
     }: State,
   ) {
     const isWatermark = mode === 'watermark';
+    const isResize = mode === 'resize';
     const doneCount = items.reduce(
       (s, i) => s + i.results.filter((r) => r.status === 'done').length,
       0,
@@ -487,6 +630,16 @@ export default class Tool extends Component<Props, State> {
             </button>
             <button
               class={`${style.tab}${
+                mode === 'resize' ? ' ' + style.tabActive : ''
+              }`}
+              role="tab"
+              aria-selected={mode === 'resize'}
+              onClick={() => onModeChange('resize')}
+            >
+              Resize
+            </button>
+            <button
+              class={`${style.tab}${
                 mode === 'watermark' ? ' ' + style.tabActive : ''
               }`}
               role="tab"
@@ -520,6 +673,11 @@ export default class Tool extends Component<Props, State> {
                 Remove <span class={style.accent}>Gemini watermarks</span>,
                 right in your browser.
               </Fragment>
+            ) : isResize ? (
+              <Fragment>
+                Resize images to <span class={style.accent}>any size</span>, all
+                at once.
+              </Fragment>
             ) : (
               <Fragment>
                 Compress into <span class={style.accent}>any format</span>, all
@@ -530,12 +688,14 @@ export default class Tool extends Component<Props, State> {
           <p class={style.heroSub}>
             {isWatermark
               ? 'Drop your Gemini-generated images and Smoosh cleanly removes the watermark using reverse alpha blending — mathematically exact, fully private, batch supported.'
+              : isResize
+              ? 'Drop images and scale them by exact pixels or a percentage — aspect ratio locked by default. High-quality Lanczos resampling, batch supported, fully local.'
               : 'Drop images and export each to a single format — or to all formats at once. Everything runs locally in your browser.'}
           </p>
 
           {items.length > 0 && (
             <div class={style.controls}>
-              {!isWatermark && (
+              {mode === 'compress' && (
                 <div class={style.modeToggle}>
                   <button
                     class={`${style.modeTab}${
@@ -555,7 +715,7 @@ export default class Tool extends Component<Props, State> {
                   </button>
                 </div>
               )}
-              {!isWatermark && subMode === 'single' && (
+              {mode === 'compress' && subMode === 'single' && (
                 <label class={style.encoderField}>
                   <span>Format</span>
                   <select
@@ -569,23 +729,112 @@ export default class Tool extends Component<Props, State> {
                   </select>
                 </label>
               )}
-              {!isWatermark &&
-                (subMode === 'all' || encoderHasQuality(encoderType)) && (
-                  <label class={style.qualityField}>
-                    <span>Quality</span>
-                    <input
-                      class={style.qualityRange}
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={quality}
-                      onInput={this.onQualityChange}
-                      disabled={processing}
-                      aria-label="Quality"
-                    />
-                    <span class={style.qualityVal}>{quality}</span>
-                  </label>
-                )}
+              {isResize && (
+                <Fragment>
+                  <div class={style.modeToggle}>
+                    <button
+                      class={`${style.modeTab}${
+                        resizeMode === 'dimensions'
+                          ? ' ' + style.modeTabActive
+                          : ''
+                      }`}
+                      onClick={() => this.onResizeModeChange('dimensions')}
+                    >
+                      Dimensions
+                    </button>
+                    <button
+                      class={`${style.modeTab}${
+                        resizeMode === 'percent'
+                          ? ' ' + style.modeTabActive
+                          : ''
+                      }`}
+                      onClick={() => this.onResizeModeChange('percent')}
+                    >
+                      Percentage
+                    </button>
+                  </div>
+                  {resizeMode === 'dimensions' ? (
+                    <Fragment>
+                      <label class={style.dimField}>
+                        <span>Width</span>
+                        <input
+                          type="number"
+                          min="1"
+                          inputMode="numeric"
+                          placeholder="auto"
+                          value={resizeWidth}
+                          onInput={this.onResizeWidthChange}
+                          disabled={processing}
+                          aria-label="Target width in pixels"
+                        />
+                        <span class={style.dimUnit}>px</span>
+                      </label>
+                      <label class={style.dimField}>
+                        <span>Height</span>
+                        <input
+                          type="number"
+                          min="1"
+                          inputMode="numeric"
+                          placeholder="auto"
+                          value={resizeHeight}
+                          onInput={this.onResizeHeightChange}
+                          disabled={processing || resizeLockAspect}
+                          aria-label="Target height in pixels"
+                        />
+                        <span class={style.dimUnit}>px</span>
+                      </label>
+                      <button
+                        class={`${style.lockBtn}${
+                          resizeLockAspect ? ' ' + style.lockBtnActive : ''
+                        }`}
+                        onClick={this.onResizeLockToggle}
+                        disabled={processing}
+                        aria-pressed={resizeLockAspect}
+                        title={
+                          resizeLockAspect
+                            ? 'Aspect ratio locked'
+                            : 'Aspect ratio unlocked'
+                        }
+                      >
+                        {resizeLockAspect ? '🔒' : '🔓'} Aspect
+                      </button>
+                    </Fragment>
+                  ) : (
+                    <label class={style.qualityField}>
+                      <span>Scale</span>
+                      <input
+                        class={style.qualityRange}
+                        type="range"
+                        min="1"
+                        max="100"
+                        value={resizePercent}
+                        onInput={this.onResizePercentChange}
+                        disabled={processing}
+                        aria-label="Resize percentage"
+                      />
+                      <span class={style.qualityVal}>{resizePercent}%</span>
+                    </label>
+                  )}
+                </Fragment>
+              )}
+              {(mode === 'compress' &&
+                (subMode === 'all' || encoderHasQuality(encoderType))) ||
+              isResize ? (
+                <label class={style.qualityField}>
+                  <span>Quality</span>
+                  <input
+                    class={style.qualityRange}
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={quality}
+                    onInput={this.onQualityChange}
+                    disabled={processing}
+                    aria-label="Quality"
+                  />
+                  <span class={style.qualityVal}>{quality}</span>
+                </label>
+              ) : null}
               <div class={style.spacer} />
               <button class={style.btnAdd} onClick={this.onAddFilesClick}>
                 + Add images
@@ -610,6 +859,8 @@ export default class Tool extends Component<Props, State> {
                 <button class={style.btnPrimary} onClick={this.processAll}>
                   {isWatermark
                     ? `Remove watermarks (${items.length})`
+                    : isResize
+                    ? `Resize all (${items.length})`
                     : subMode === 'all'
                     ? `Convert to all formats (${items.length})`
                     : `Process all (${items.length})`}
@@ -648,6 +899,8 @@ export default class Tool extends Component<Props, State> {
               <div class={style.dropTitle}>
                 {isWatermark
                   ? 'Drop Gemini-generated images'
+                  : isResize
+                  ? 'Drop images to resize'
                   : 'Drop images to compress'}
               </div>
               <div class={style.dropHint}>

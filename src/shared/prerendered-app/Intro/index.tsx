@@ -29,7 +29,7 @@ async function getImageClipboardItem(
   }
 }
 
-type Tool = 'compress' | 'watermark';
+type Tool = 'compress' | 'watermark' | 'resize';
 
 interface Props {
   tool?: Tool;
@@ -227,6 +227,11 @@ export default class Intro extends Component<Props, State> {
                 Remove watermarks.{' '}
                 <span class={style.accent}>Clean, private,</span> pixel-perfect.
               </Fragment>
+            ) : tool === 'resize' ? (
+              <Fragment>
+                Resize images. <span class={style.accent}>Sharp, private,</span>{' '}
+                pixel-perfect.
+              </Fragment>
             ) : (
               <Fragment>
                 Compress images.{' '}
@@ -237,6 +242,8 @@ export default class Intro extends Component<Props, State> {
           <p class={style.heroSub}>
             {tool === 'watermark'
               ? 'Smoosh cleanly removes Gemini AI watermarks using reverse alpha blending — a mathematically exact inversion, not AI inpainting. Batch supported, fully private.'
+              : tool === 'resize'
+              ? 'Smoosh scales images by exact pixels or percentage with high-quality Lanczos resampling — right in your browser. Aspect ratio locked by default, batch a whole folder at once.'
               : 'Smoosh shrinks and converts images with industry codecs — right in your browser. Your files never leave your device. Compare codecs side by side and batch a whole folder at once.'}
           </p>
 
@@ -251,6 +258,16 @@ export default class Intro extends Component<Props, State> {
                 onClick={() => onToolChange('compress')}
               >
                 Compress
+              </button>
+              <button
+                class={`${style.toolTab}${
+                  tool === 'resize' ? ' ' + style.toolTabActive : ''
+                }`}
+                role="tab"
+                aria-selected={tool === 'resize'}
+                onClick={() => onToolChange('resize')}
+              >
+                Resize
               </button>
               <button
                 class={`${style.toolTab}${
@@ -295,6 +312,8 @@ export default class Intro extends Component<Props, State> {
               <div class={style.dropTitle}>
                 {tool === 'watermark'
                   ? 'Drop Gemini-generated images'
+                  : tool === 'resize'
+                  ? 'Drop images to resize'
                   : 'Drop images here'}
               </div>
               <div class={style.dropHint}>
@@ -416,6 +435,20 @@ export default class Intro extends Component<Props, State> {
                   }
                 >
                   Compress
+                </a>
+                <a
+                  class={style.footerLink}
+                  href="/editor?tool=resize"
+                  onClick={
+                    onOpenTool
+                      ? (e) => {
+                          e.preventDefault();
+                          onOpenTool('resize');
+                        }
+                      : undefined
+                  }
+                >
+                  Resize
                 </a>
                 <a
                   class={style.footerLink}

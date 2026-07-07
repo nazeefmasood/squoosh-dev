@@ -277,6 +277,70 @@
   color: var(--text);
 }
 
+/* ---- Resize dimension fields ---- */
+.dimField {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-6);
+  font-size: var(--text-body-sm);
+  color: var(--text-muted);
+}
+
+.dimField input {
+  font-family: var(--font-switzer);
+  font-size: var(--text-body-sm);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  padding: 8px 12px;
+  width: 84px;
+  text-align: right;
+  -moz-appearance: textfield;
+}
+
+.dimField input::-webkit-outer-spin-button,
+.dimField input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.dimField input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dimUnit {
+  color: var(--text-faint);
+}
+
+.lockBtn {
+  font-family: var(--font-switzer);
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-regular);
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.lockBtn:hover {
+  color: var(--text);
+}
+
+.lockBtnActive,
+.lockBtnActive:hover {
+  color: var(--color-ink-black);
+  border-color: var(--color-ink-black);
+}
+
+.lockBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ---- Buttons ---- */
 .btnPrimary,
 .btnAdd,
