@@ -8,10 +8,14 @@
  *
  * GET ?url=<absolute icon url>
  */
+import { assertSafeUrl } from './_ssrf';
 
 export default async function handler(req: any, res: any) {
   const url = (req.query && req.query.url) || '';
-  if (!url || !/^https?:\/\//i.test(url)) {
+  let parsed: URL;
+  try {
+    parsed = assertSafeUrl(url);
+  } catch (e: any) {
     res.statusCode = 400;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: 'Missing or invalid url' }));
@@ -21,19 +25,26 @@ export default async function handler(req: any, res: any) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 10000);
   try {
-    const upstream = await fetch(url, {
+    const upstream = await fetch(parsed.href, {
       redirect: 'follow',
       signal: ctrl.signal,
       headers: {
         'user-agent': 'Mozilla/5.0 (compatible; SmooshFaviconBot/1.0)',
       },
     });
+    // Re-check the final URL after redirects (block metadata rebinds).
+    try {
+      assertSafeUrl(upstream.url);
+    } catch {
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Blocked target' }));
+      return;
+    }
     if (!upstream.ok) {
       res.statusCode = 502;
       res.setHeader('Content-Type', 'application/json');
-      res.end(
-        JSON.stringify({ error: `Upstream returned ${upstream.status}` }),
-      );
+      res.end(JSON.stringify({ error: 'Upstream unavailable' }));
       return;
     }
     const ct =
@@ -44,10 +55,10 @@ export default async function handler(req: any, res: any) {
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.end(buf);
-  } catch (e: any) {
+  } catch {
     res.statusCode = 502;
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: e?.message || 'Fetch failed' }));
+    res.end(JSON.stringify({ error: 'Fetch failed' }));
   } finally {
     clearTimeout(t);
   }

@@ -10,6 +10,7 @@
  * POST { url }  or  GET ?url=
  * -> { finalUrl, title, icons: [{rel,href,sizes,type}], manifestIcons: [...] }
  */
+import { assertSafeUrl } from './_ssrf';
 
 export interface FaviconIcon {
   rel?: string;
@@ -79,9 +80,11 @@ async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
 
 async function check(input: string): Promise<CheckResult> {
   const url = normalizeUrl(input);
+  assertSafeUrl(url); // SSRF guard
   const res = await fetchWithTimeout(url, 10000);
-  if (!res.ok) throw new Error(`Site returned ${res.status}`);
+  if (!res.ok) throw new Error('Unreachable');
   const finalUrl = res.url;
+  assertSafeUrl(finalUrl); // re-check after redirects
   const html = await res.text();
   const title = (
     (html.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || ''
@@ -99,12 +102,21 @@ async function check(input: string): Promise<CheckResult> {
   let manifestIcons: FaviconIcon[] = [];
   if (mani) {
     try {
+      assertSafeUrl(mani.href); // SSRF guard on manifest URL too
       const mj = await (await fetchWithTimeout(mani.href, 8000)).json();
-      manifestIcons = (mj.icons || []).map((i: any) => ({
-        href: new URL(i.src, finalUrl).href,
-        sizes: i.sizes || '',
-        type: i.type || '',
-      }));
+      manifestIcons = (mj.icons || [])
+        .map((i: any) => {
+          const href = new URL(i.src, finalUrl).href;
+          return { href, sizes: i.sizes || '', type: i.type || '' };
+        })
+        .filter((i: any) => {
+          try {
+            assertSafeUrl(i.href);
+            return true;
+          } catch {
+            return false;
+          }
+        });
     } catch {
       /* manifest unreachable — ignore */
     }
@@ -143,7 +155,14 @@ export default async function handler(req: any, res: any) {
     res.statusCode = 200;
     res.end(JSON.stringify(result));
   } catch (e: any) {
-    res.statusCode = 502;
-    res.end(JSON.stringify({ error: e?.message || 'Could not fetch site' }));
+    // Don't echo internal/SSRF details back to the client.
+    const msg = e?.message || '';
+    const safe = /Unreachable|Blocked target|Invalid URL|Only http/.test(msg)
+      ? msg
+      : 'Could not fetch site';
+    res.statusCode = /Blocked target|Invalid URL|Only http/.test(msg)
+      ? 400
+      : 502;
+    res.end(JSON.stringify({ error: safe }));
   }
 }
