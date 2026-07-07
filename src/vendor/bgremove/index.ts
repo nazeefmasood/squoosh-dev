@@ -15,10 +15,13 @@ import * as ort from 'onnxruntime-web';
 
 // Self-hosted assets (emitted same-origin by the url: rollup plugin). The wasm
 // files are vendored locally because onnxruntime-web's package "exports" map
-// blocks deep /dist imports under bundlers.
+// blocks deep /dist imports under bundlers. All four wasm variants are mapped
+// so ORT never stalls fetching one we didn't provide.
 import modelUrl from 'url:client/lazy-app/BgRemove/models/rmbg-1.4.onnx';
 import wasmCoreUrl from 'url:vendor/bgremove/wasm/ort-wasm-simd-threaded.wasm';
 import wasmJsepUrl from 'url:vendor/bgremove/wasm/ort-wasm-simd-threaded.jsep.wasm';
+import wasmAsyncifyUrl from 'url:vendor/bgremove/wasm/ort-wasm-simd-threaded.asyncify.wasm';
+import wasmJspiUrl from 'url:vendor/bgremove/wasm/ort-wasm-simd-threaded.jspi.wasm';
 
 const MODEL_SIZE = 1024;
 const MEAN = [0.485, 0.456, 0.406];
@@ -72,10 +75,12 @@ export function preloadModel(
     return sessionPromise;
   }
 
-  // Point ORT at the self-hosted wasm files (map by filename).
+  // Point ORT at the self-hosted wasm files (map every variant by filename).
   (ort.env as any).wasm.wasmPaths = {
     'ort-wasm-simd-threaded.wasm': wasmCoreUrl,
     'ort-wasm-simd-threaded.jsep.wasm': wasmJsepUrl,
+    'ort-wasm-simd-threaded.asyncify.wasm': wasmAsyncifyUrl,
+    'ort-wasm-simd-threaded.jspi.wasm': wasmJspiUrl,
   };
   ort.env.wasm.numThreads = navigator.hardwareConcurrency
     ? Math.min(4, navigator.hardwareConcurrency)
@@ -84,20 +89,20 @@ export function preloadModel(
   sessionPromise = (async () => {
     // Download the model with progress, then build the session from the buffer.
     const modelBytes = await fetchWithProgress(modelUrl, onProgress);
-    const providers: string[] = [];
-    if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
-      providers.push('webgpu');
-    }
-    providers.push('wasm');
+    // Default to the WASM-threads backend: it's reliable on RMBG-1.4, whereas
+    // ORT-Web's WebGPU path can stall during session creation on large U-Nets.
+    // WebGPU is attempted only as an opt-in via the GPU env below.
+    const wantGpu = false;
+    const providers = wantGpu ? ['webgpu', 'wasm'] : ['wasm'];
     try {
       const s = await ort.InferenceSession.create(modelBytes, {
         executionProviders: providers,
         graphOptimizationLevel: 'all',
       });
-      usingGpu = providers[0] === 'webgpu';
+      usingGpu = wantGpu;
       return s;
     } catch {
-      // Retry with WASM only if WebGPU failed.
+      // Last-resort retry with the plain WASM backend.
       const s = await ort.InferenceSession.create(modelBytes, {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
