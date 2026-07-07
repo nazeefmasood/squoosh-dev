@@ -14,7 +14,7 @@ interface Props {
   showSnack: SnackBarElement['showSnackbar'];
 }
 
-type InputMode = 'text' | 'emoji' | 'image';
+type InputMode = 'text' | 'emoji' | 'image' | 'check';
 type Shape = 'square' | 'rounded' | 'circle';
 
 interface State {
@@ -29,6 +29,16 @@ interface State {
   imageSrc?: string; // object URL
   imageName?: string;
   generating: boolean;
+  // Favicon checker
+  checkUrl: string;
+  checkLoading: boolean;
+  checkResult?: {
+    finalUrl: string;
+    title: string;
+    icons: { rel?: string; href: string; sizes?: string; type?: string }[];
+    manifestIcons: { href: string; sizes?: string; type?: string }[];
+  };
+  checkError?: string;
 }
 
 const FONTS = [
@@ -78,6 +88,8 @@ export default class Favicon extends Component<Props, State> {
     bgEnabled: true,
     shape: 'rounded',
     generating: false,
+    checkUrl: '',
+    checkLoading: false,
   };
   private preview?: HTMLCanvasElement;
   private fileInput?: HTMLInputElement;
@@ -274,6 +286,51 @@ export default class Favicon extends Component<Props, State> {
     }
   };
 
+  private runCheck = async () => {
+    const url = this.state.checkUrl.trim();
+    if (!url || this.state.checkLoading) return;
+    this.setState({
+      checkLoading: true,
+      checkError: undefined,
+      checkResult: undefined,
+    });
+    try {
+      const res = await fetch('/api/favicon-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Check failed');
+      this.setState({ checkResult: data });
+    } catch (e: any) {
+      this.setState({ checkError: e?.message || 'Could not check that site' });
+    } finally {
+      this.setState({ checkLoading: false });
+    }
+  };
+
+  /** Download a found icon via the same-origin proxy (works under COEP). */
+  private downloadIcon = async (href: string) => {
+    try {
+      const res = await fetch(
+        '/api/favicon-img?url=' + encodeURIComponent(href),
+      );
+      if (!res.ok) throw new Error('Fetch failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = href.split('/').pop()?.split('?')[0] || 'favicon';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      this.props.showSnack("Couldn't download that icon");
+    }
+  };
+
   render({ onModeChange, onBack }: Props, s: State) {
     return (
       <div class={style.page}>
@@ -345,191 +402,313 @@ export default class Favicon extends Component<Props, State> {
         </nav>
 
         <section class={style.body}>
-          <div class={style.previewCol}>
-            <div class={style.previewStage}>
-              <canvas
-                class={style.preview}
-                ref={(el: HTMLCanvasElement | null) => {
-                  this.preview = el ?? undefined;
-                }}
-              />
-            </div>
-            <div class={style.sizeRow}>
-              <div class={style.sizeTile}>
-                <canvas ref={(e: any) => this.bindMini(e, 48)} />
-              </div>
-              <div class={style.sizeTile}>
-                <canvas ref={(e: any) => this.bindMini(e, 32)} />
-              </div>
-              <div class={style.sizeTile}>
-                <canvas ref={(e: any) => this.bindMini(e, 16)} />
-              </div>
-            </div>
-            <p class={style.previewHint}>
-              Live preview · 128 / 48 / 32 / 16 px
-            </p>
-          </div>
-
-          <aside class={style.panel}>
-            <div class={style.panelBody}>
-              <h3 class={style.panelTitle}>Favicon generator</h3>
-              <div class={style.segToggle}>
-                {(['text', 'emoji', 'image'] as InputMode[]).map((m) => (
-                  <button
-                    class={`${style.segBtn}${
-                      s.inputMode === m ? ' ' + style.segBtnActive : ''
-                    }`}
-                    onClick={() => this.setState({ inputMode: m })}
-                  >
-                    {m === 'text' ? 'Text' : m === 'emoji' ? 'Emoji' : 'Image'}
-                  </button>
-                ))}
-              </div>
-
-              {s.inputMode === 'text' && (
-                <label class={style.field}>
-                  <span>Text</span>
-                  <input
-                    class={style.textInput}
-                    type="text"
-                    maxLength={4}
-                    value={s.text}
-                    onInput={(e: Event) =>
-                      this.setState({
-                        text: (e.target as HTMLInputElement).value,
-                      })
-                    }
-                    placeholder="1–4 chars"
-                  />
-                </label>
-              )}
-              {s.inputMode === 'emoji' && (
-                <label class={style.field}>
-                  <span>Emoji</span>
-                  <input
-                    class={style.textInput}
-                    type="text"
-                    value={s.emoji}
-                    onInput={(e: Event) =>
-                      this.setState({
-                        emoji: (e.target as HTMLInputElement).value,
-                      })
-                    }
-                  />
-                </label>
-              )}
-              {s.inputMode === 'image' && (
+          {s.inputMode === 'check' ? (
+            <div class={style.checker}>
+              <div class={style.checkForm}>
+                <input
+                  class={style.checkInput}
+                  type="text"
+                  placeholder="example.com or https://example.com"
+                  value={s.checkUrl}
+                  onInput={(e: Event) =>
+                    this.setState({
+                      checkUrl: (e.target as HTMLInputElement).value,
+                    })
+                  }
+                  onKeyDown={(e: KeyboardEvent) => {
+                    if (e.key === 'Enter') this.runCheck();
+                  }}
+                />
                 <button
-                  class={style.uploadBtn}
-                  onClick={() => this.fileInput?.click()}
+                  class={style.checkBtn}
+                  onClick={this.runCheck}
+                  disabled={s.checkLoading || !s.checkUrl.trim()}
                 >
-                  {s.imageName ? `Change: ${s.imageName}` : 'Choose image'}
+                  {s.checkLoading ? 'Checking…' : 'Check'}
                 </button>
+              </div>
+              <p class={style.checkNote}>
+                Fetches the site server-side and lists every favicon it declares
+                — including apple-touch-icon, SVG, and the PWA manifest. The
+                target URL passes through Smoosh's server, not your browser's
+                history.
+              </p>
+
+              {s.checkError && (
+                <div class={style.checkError}>{s.checkError}</div>
               )}
 
-              {s.inputMode !== 'image' && (
-                <Fragment>
+              {s.checkResult && (
+                <div class={style.checkResults}>
+                  <div class={style.checkMeta}>
+                    <strong>
+                      {s.checkResult.title || s.checkResult.finalUrl}
+                    </strong>
+                    <span>{s.checkResult.finalUrl}</span>
+                  </div>
+                  <div class={style.iconGrid}>
+                    {s.checkResult.icons.map((ic) => (
+                      <div class={style.iconCard}>
+                        <img
+                          class={style.iconImg}
+                          src={
+                            '/api/favicon-img?url=' +
+                            encodeURIComponent(ic.href)
+                          }
+                          alt={ic.rel || 'icon'}
+                          onError={(e: Event) => {
+                            (
+                              e.currentTarget as HTMLImageElement
+                            ).style.opacity = '0.2';
+                          }}
+                        />
+                        <div class={style.iconInfo}>
+                          <span class={style.iconRel}>{ic.rel || 'icon'}</span>
+                          <span class={style.iconSize}>
+                            {ic.sizes || ic.type || '—'}
+                          </span>
+                        </div>
+                        <button
+                          class={style.iconDl}
+                          onClick={() => this.downloadIcon(ic.href)}
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    ))}
+                    {s.checkResult.manifestIcons.map((ic) => (
+                      <div class={style.iconCard}>
+                        <img
+                          class={style.iconImg}
+                          src={
+                            '/api/favicon-img?url=' +
+                            encodeURIComponent(ic.href)
+                          }
+                          alt="manifest icon"
+                          onError={(e: Event) => {
+                            (
+                              e.currentTarget as HTMLImageElement
+                            ).style.opacity = '0.2';
+                          }}
+                        />
+                        <div class={style.iconInfo}>
+                          <span class={style.iconRel}>manifest</span>
+                          <span class={style.iconSize}>
+                            {ic.sizes || ic.type || '—'}
+                          </span>
+                        </div>
+                        <button
+                          class={style.iconDl}
+                          onClick={() => this.downloadIcon(ic.href)}
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Fragment>
+              <div class={style.previewCol}>
+                <div class={style.previewStage}>
+                  <canvas
+                    class={style.preview}
+                    ref={(el: HTMLCanvasElement | null) => {
+                      this.preview = el ?? undefined;
+                    }}
+                  />
+                </div>
+                <div class={style.sizeRow}>
+                  <div class={style.sizeTile}>
+                    <canvas ref={(e: any) => this.bindMini(e, 48)} />
+                  </div>
+                  <div class={style.sizeTile}>
+                    <canvas ref={(e: any) => this.bindMini(e, 32)} />
+                  </div>
+                  <div class={style.sizeTile}>
+                    <canvas ref={(e: any) => this.bindMini(e, 16)} />
+                  </div>
+                </div>
+                <p class={style.previewHint}>
+                  Live preview · 128 / 48 / 32 / 16 px
+                </p>
+              </div>
+
+              <aside class={style.panel}>
+                <div class={style.panelBody}>
+                  <h3 class={style.panelTitle}>Favicon generator</h3>
+                  <div class={style.segToggle}>
+                    {(['text', 'emoji', 'image', 'check'] as InputMode[]).map(
+                      (m) => (
+                        <button
+                          class={`${style.segBtn}${
+                            s.inputMode === m ? ' ' + style.segBtnActive : ''
+                          }`}
+                          onClick={() => this.setState({ inputMode: m })}
+                        >
+                          {m === 'text'
+                            ? 'Text'
+                            : m === 'emoji'
+                            ? 'Emoji'
+                            : m === 'image'
+                            ? 'Image'
+                            : 'Check site'}
+                        </button>
+                      ),
+                    )}
+                  </div>
+
                   {s.inputMode === 'text' && (
                     <label class={style.field}>
-                      <span>Font</span>
-                      <select
-                        class={style.select}
-                        value={s.fontFamily}
-                        onChange={(e: Event) =>
-                          this.setState({
-                            fontFamily: (e.target as HTMLSelectElement).value,
-                          })
-                        }
-                      >
-                        {FONTS.map((f) => (
-                          <option value={f.value}>{f.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <label class={style.field}>
-                    <span>
-                      {s.inputMode === 'text' ? 'Text color' : 'Color'}
-                    </span>
-                    <input
-                      class={style.colorInput}
-                      type="color"
-                      value={s.textColor}
-                      onInput={(e: Event) =>
-                        this.setState({
-                          textColor: (e.target as HTMLInputElement).value,
-                        })
-                      }
-                    />
-                  </label>
-                  <label class={style.checkRow}>
-                    <input
-                      type="checkbox"
-                      checked={s.bgEnabled}
-                      onChange={() =>
-                        this.setState({ bgEnabled: !s.bgEnabled })
-                      }
-                    />
-                    <span>Background fill</span>
-                  </label>
-                  {s.bgEnabled && (
-                    <label class={style.field}>
-                      <span>Background</span>
+                      <span>Text</span>
                       <input
-                        class={style.colorInput}
-                        type="color"
-                        value={s.bgColor}
+                        class={style.textInput}
+                        type="text"
+                        maxLength={4}
+                        value={s.text}
                         onInput={(e: Event) =>
                           this.setState({
-                            bgColor: (e.target as HTMLInputElement).value,
+                            text: (e.target as HTMLInputElement).value,
+                          })
+                        }
+                        placeholder="1–4 chars"
+                      />
+                    </label>
+                  )}
+                  {s.inputMode === 'emoji' && (
+                    <label class={style.field}>
+                      <span>Emoji</span>
+                      <input
+                        class={style.textInput}
+                        type="text"
+                        value={s.emoji}
+                        onInput={(e: Event) =>
+                          this.setState({
+                            emoji: (e.target as HTMLInputElement).value,
                           })
                         }
                       />
                     </label>
                   )}
-                  <div class={style.shapeRow}>
-                    <span class={style.shapeLabel}>Shape</span>
-                    {(['square', 'rounded', 'circle'] as Shape[]).map((sh) => (
-                      <button
-                        class={`${style.shapeBtn}${
-                          s.shape === sh ? ' ' + style.shapeBtnActive : ''
-                        }`}
-                        onClick={() => this.setState({ shape: sh })}
-                      >
-                        {sh}
+                  {s.inputMode === 'image' && (
+                    <button
+                      class={style.uploadBtn}
+                      onClick={() => this.fileInput?.click()}
+                    >
+                      {s.imageName ? `Change: ${s.imageName}` : 'Choose image'}
+                    </button>
+                  )}
+
+                  {s.inputMode !== 'image' && (
+                    <Fragment>
+                      {s.inputMode === 'text' && (
+                        <label class={style.field}>
+                          <span>Font</span>
+                          <select
+                            class={style.select}
+                            value={s.fontFamily}
+                            onChange={(e: Event) =>
+                              this.setState({
+                                fontFamily: (e.target as HTMLSelectElement)
+                                  .value,
+                              })
+                            }
+                          >
+                            {FONTS.map((f) => (
+                              <option value={f.value}>{f.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      <label class={style.field}>
+                        <span>
+                          {s.inputMode === 'text' ? 'Text color' : 'Color'}
+                        </span>
+                        <input
+                          class={style.colorInput}
+                          type="color"
+                          value={s.textColor}
+                          onInput={(e: Event) =>
+                            this.setState({
+                              textColor: (e.target as HTMLInputElement).value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label class={style.checkRow}>
+                        <input
+                          type="checkbox"
+                          checked={s.bgEnabled}
+                          onChange={() =>
+                            this.setState({ bgEnabled: !s.bgEnabled })
+                          }
+                        />
+                        <span>Background fill</span>
+                      </label>
+                      {s.bgEnabled && (
+                        <label class={style.field}>
+                          <span>Background</span>
+                          <input
+                            class={style.colorInput}
+                            type="color"
+                            value={s.bgColor}
+                            onInput={(e: Event) =>
+                              this.setState({
+                                bgColor: (e.target as HTMLInputElement).value,
+                              })
+                            }
+                          />
+                        </label>
+                      )}
+                      <div class={style.shapeRow}>
+                        <span class={style.shapeLabel}>Shape</span>
+                        {(['square', 'rounded', 'circle'] as Shape[]).map(
+                          (sh) => (
+                            <button
+                              class={`${style.shapeBtn}${
+                                s.shape === sh ? ' ' + style.shapeBtnActive : ''
+                              }`}
+                              onClick={() => this.setState({ shape: sh })}
+                            >
+                              {sh}
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </Fragment>
+                  )}
+
+                  <div class={style.snippetBox}>
+                    <div class={style.snippetHead}>
+                      <span>HTML for your &lt;head&gt;</span>
+                      <button class={style.copyBtn} onClick={this.copySnippet}>
+                        Copy
                       </button>
-                    ))}
+                    </div>
+                    <pre class={style.snippet}>{HTML_SNIPPET}</pre>
                   </div>
-                </Fragment>
-              )}
-
-              <div class={style.snippetBox}>
-                <div class={style.snippetHead}>
-                  <span>HTML for your &lt;head&gt;</span>
-                  <button class={style.copyBtn} onClick={this.copySnippet}>
-                    Copy
-                  </button>
                 </div>
-                <pre class={style.snippet}>{HTML_SNIPPET}</pre>
-              </div>
-            </div>
 
-            <div class={style.exportBox}>
-              <button
-                class={style.generateBtn}
-                onClick={this.generate}
-                disabled={s.generating}
-              >
-                {s.generating
-                  ? 'Generating…'
-                  : 'Download favicon package (.zip)'}
-              </button>
-              <p class={style.includes}>
-                favicon.ico · 16/32 px PNG · apple-touch-icon · android 192/512
-                · webmanifest
-              </p>
-            </div>
-          </aside>
+                <div class={style.exportBox}>
+                  <button
+                    class={style.generateBtn}
+                    onClick={this.generate}
+                    disabled={s.generating}
+                  >
+                    {s.generating
+                      ? 'Generating…'
+                      : 'Download favicon package (.zip)'}
+                  </button>
+                  <p class={style.includes}>
+                    favicon.ico · 16/32 px PNG · apple-touch-icon · android
+                    192/512 · webmanifest
+                  </p>
+                </div>
+              </aside>
+            </Fragment>
+          )}
         </section>
       </div>
     );
