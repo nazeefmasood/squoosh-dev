@@ -92,10 +92,22 @@ function maskToAlpha(
   targetW: number,
   targetH: number,
 ): Uint8ClampedArray {
+  // RMBG-1.4's output is already a probability-like map, NOT logits — so we
+  // min-max normalize it (the model's documented postprocessing), never a
+  // second sigmoid. A sigmoid here would compress the range and leave the
+  // background semi-opaque instead of transparent.
+  let min = Infinity;
+  let max = -Infinity;
+  const n = maskW * maskH;
+  for (let i = 0; i < n; i++) {
+    const v = raw[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const range = max - min || 1;
   const small = new ImageData(maskW, maskH);
-  for (let i = 0; i < maskW * maskH; i++) {
-    const v = 1 / (1 + Math.exp(-raw[i]));
-    const a = Math.round(v * 255);
+  for (let i = 0; i < n; i++) {
+    const a = Math.round(((raw[i] - min) / range) * 255);
     small.data[i * 4] = a;
     small.data[i * 4 + 1] = a;
     small.data[i * 4 + 2] = a;
@@ -121,7 +133,13 @@ async function init() {
     'ort-wasm-simd-threaded.asyncify.wasm': wasmAsyncifyUrl,
     'ort-wasm-simd-threaded.jspi.wasm': wasmJspiUrl,
   };
-  ort.env.wasm.numThreads = 1;
+  // Multi-threaded WASM is safe here — we're already inside a dedicated
+  // worker, so the deadlock that afflicted main-thread threading doesn't
+  // apply. Threads cut a 1024² U-Net pass from ~50s down to a few seconds.
+  ort.env.wasm.numThreads = Math.max(
+    1,
+    Math.min(4, (self.navigator && self.navigator.hardwareConcurrency) || 4),
+  );
   ort.env.wasm.proxy = false;
 
   const modelBytes = await fetchWithProgress(modelUrl);
