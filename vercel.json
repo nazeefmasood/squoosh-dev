@@ -3,9 +3,9 @@
   "outputDirectory": "build",
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/editor", "destination": "/index.html" },
-    { "source": "/watermark", "destination": "/index.html" },
-    { "source": "/batch", "destination": "/index.html" }
+    { "source": "/editor", "destination": "/" },
+    { "source": "/watermark", "destination": "/" },
+    { "source": "/batch", "destination": "/" }
   ],
   "headers": [
     {
