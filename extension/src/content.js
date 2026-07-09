@@ -148,8 +148,22 @@ function mountButtons(wrap, el) {
   brand.href = 'https://smoosh-dev.vercel.app';
   brand.target = '_blank';
   brand.rel = 'noopener noreferrer';
-  brand.textContent = 'Smoosh ↗';
   brand.title = 'Open smoosh-dev.vercel.app';
+  const bText = document.createElement('span');
+  bText.textContent = 'Smoosh';
+  const bArrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  bArrow.setAttribute('viewBox', '0 0 24 24');
+  bArrow.setAttribute('fill', 'none');
+  bArrow.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', 'M7 17 17 7M17 7H9m8 0v8');
+  p.setAttribute('stroke', 'currentColor');
+  p.setAttribute('stroke-width', '2');
+  p.setAttribute('stroke-linecap', 'round');
+  p.setAttribute('stroke-linejoin', 'round');
+  bArrow.appendChild(p);
+  brand.appendChild(bText);
+  brand.appendChild(bArrow);
   bar.appendChild(brand);
   wrap.appendChild(bar);
 }
@@ -246,8 +260,9 @@ function injectStyles() {
 .smoosh-btn[data-busy="1"]{opacity:.65;cursor:progress;transform:none;filter:grayscale(.3)}
 .smoosh-btn--ghost{background:rgba(255,254,247,.9);backdrop-filter:blur(6px);color:#666;border:1px solid #aaa}
 .smoosh-btn--ghost:hover{color:#000;border-color:#000;filter:none}
-.smoosh-brand{display:inline-flex;align-items:center;font-family:'Switzer','Inter',ui-sans-serif,system-ui,sans-serif;font-size:11px;font-weight:400;color:#fff;text-decoration:none;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);border-radius:999px;padding:6px 10px;opacity:.85;transition:opacity .15s ease}
+.smoosh-brand{display:inline-flex;align-items:center;gap:4px;font-family:'Switzer','Inter',ui-sans-serif,system-ui,sans-serif;font-size:11px;font-weight:400;color:#fff;text-decoration:none;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);border-radius:999px;padding:6px 10px;opacity:.85;transition:opacity .15s ease}
 .smoosh-brand:hover{opacity:1}
+.smoosh-brand svg{width:11px;height:11px}
 `;
   document.head.appendChild(css);
 }

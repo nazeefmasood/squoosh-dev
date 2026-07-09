@@ -88,14 +88,20 @@ body {
   font-weight: 400;
 }
 .visit {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   margin-top: 12px;
-  text-align: center;
   font-size: 12px;
   color: var(--graphite);
   text-decoration: none;
   border-top: 1px solid var(--line);
   padding-top: 10px;
+}
+.visit svg {
+  width: 14px;
+  height: 14px;
 }
 .visit:hover {
   color: var(--ink);
