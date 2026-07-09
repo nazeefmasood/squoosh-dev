@@ -38,8 +38,19 @@ interface State {
   checkResult?: {
     finalUrl: string;
     title: string;
-    icons: { rel?: string; href: string; sizes?: string; type?: string }[];
-    manifestIcons: { href: string; sizes?: string; type?: string }[];
+    icons: {
+      rel?: string;
+      href: string;
+      sizes?: string;
+      type?: string;
+      bytes?: number;
+    }[];
+    manifestIcons: {
+      href: string;
+      sizes?: string;
+      type?: string;
+      bytes?: number;
+    }[];
   };
   checkError?: string;
 }
@@ -105,6 +116,23 @@ function scaleTo(source: HTMLCanvasElement, size: number): HTMLCanvasElement {
   (ctx as any).imageSmoothingQuality = 'high';
   ctx.drawImage(cur, 0, 0, size, size);
   return out;
+}
+
+function prettyBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** Extension for a MIME type, for download filenames without one. */
+function extForType(type: string): string {
+  if (type.includes('svg')) return '.svg';
+  if (type.includes('png')) return '.png';
+  if (type.includes('jpeg') || type.includes('jpg')) return '.jpg';
+  if (type.includes('webp')) return '.webp';
+  if (type.includes('gif')) return '.gif';
+  if (type.includes('ico')) return '.ico';
+  return '';
 }
 
 function loadImageEl(src: string): Promise<HTMLImageElement> {
@@ -410,17 +438,33 @@ export default class Favicon extends Component<Props, State> {
   };
 
   /** Download a found icon via the same-origin proxy (works under COEP). */
-  private downloadIcon = async (href: string) => {
+  private downloadIcon = async (href: string, sizes?: string) => {
     try {
       const res = await fetch(
         '/api/favicon-img?url=' + encodeURIComponent(href),
       );
       if (!res.ok) throw new Error('Fetch failed');
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      // Descriptive filename: host + original name (+ real extension when
+      // the URL path doesn't carry one, e.g. /favicon?v=2).
+      let name = href.split('/').pop()?.split('?')[0] || 'favicon';
+      if (!/\.[a-z0-9]{2,5}$/i.test(name)) {
+        name = (name || 'favicon') + extForType(blob.type);
+      }
+      let host = '';
+      try {
+        host = new URL(href).hostname.replace(/^www\./, '') + '-';
+      } catch {
+        /* keep name as-is */
+      }
+      const dim = sizes && /^\d+x\d+/.test(sizes) ? sizes.split(' ')[0] : '';
+      const base = name.replace(/\.[a-z0-9]{2,5}$/i, '');
+      const ext = name.slice(base.length);
       const a = document.createElement('a');
+      const url = URL.createObjectURL(blob);
       a.href = url;
-      a.download = href.split('/').pop()?.split('?')[0] || 'favicon';
+      a.download =
+        host + base + (dim && !base.includes(dim) ? `-${dim}` : '') + ext;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -536,13 +580,34 @@ export default class Favicon extends Component<Props, State> {
                           <span class={style.iconRel}>{ic.rel || 'icon'}</span>
                           <span class={style.iconSize}>
                             {ic.sizes || ic.type || '—'}
+                            {ic.bytes ? ` · ${prettyBytes(ic.bytes)}` : ''}
                           </span>
                         </div>
                         <button
                           class={style.iconDl}
-                          onClick={() => this.downloadIcon(ic.href)}
+                          onClick={() => this.downloadIcon(ic.href, ic.sizes)}
+                          aria-label="Download icon"
                         >
-                          ↓
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M12 4v10m0 0 4-4m-4 4-4-4"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                            <path
+                              d="M4 17v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            />
+                          </svg>
+                          Download
                         </button>
                       </div>
                     ))}
@@ -565,13 +630,34 @@ export default class Favicon extends Component<Props, State> {
                           <span class={style.iconRel}>manifest</span>
                           <span class={style.iconSize}>
                             {ic.sizes || ic.type || '—'}
+                            {ic.bytes ? ` · ${prettyBytes(ic.bytes)}` : ''}
                           </span>
                         </div>
                         <button
                           class={style.iconDl}
-                          onClick={() => this.downloadIcon(ic.href)}
+                          onClick={() => this.downloadIcon(ic.href, ic.sizes)}
+                          aria-label="Download icon"
                         >
-                          ↓
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M12 4v10m0 0 4-4m-4 4-4-4"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                            <path
+                              d="M4 17v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            />
+                          </svg>
+                          Download
                         </button>
                       </div>
                     ))}

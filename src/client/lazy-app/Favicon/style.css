@@ -623,13 +623,22 @@
 }
 
 .iconDl {
-  font-size: var(--text-body-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-switzer);
+  font-size: var(--text-caption);
   color: var(--color-ink-black);
   background: transparent;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-pill);
-  padding: 4px 14px;
+  padding: 5px 12px;
   cursor: pointer;
+}
+
+.iconDl svg {
+  width: 14px;
+  height: 14px;
 }
 
 .iconDl:hover {

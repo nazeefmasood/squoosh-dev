@@ -125,6 +125,12 @@ export default class App extends Component<Props, State> {
 
   private setActiveTool = (tool: ToolMode) => {
     if (tool === this.state.activeTool) return;
+    // Keep the URL in sync so a refresh restores the tool you were on.
+    if (this.state.isEditorOpen) {
+      const url = new URL(location.href);
+      url.searchParams.set('tool', tool);
+      history.replaceState(null, '', url.href);
+    }
     // Files are per-tool: an image loaded in one tool shouldn't follow the
     // user into the others.
     this.setState({ activeTool: tool, files: [] });
