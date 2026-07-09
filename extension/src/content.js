@@ -11,60 +11,62 @@ const SITE = location.hostname.includes('chatgpt')
   : null;
 
 // Gemini's images carry an invisible watermark; ChatGPT's don't. Both can be
-// compressed. The available actions per site:
+// compressed. Each action hands the image off to the Smoosh website, which
+// already has proven watermark-removal and compression tools.
 const ACTIONS = {
   gemini: [
     {
-      mode: 'watermark',
-      format: 'image/png',
+      tool: 'watermark',
       label: 'Remove watermark',
       variant: 'primary',
     },
     {
-      mode: 'compress',
-      format: 'image/webp',
+      tool: 'compress',
       label: 'Compress',
       variant: 'ghost',
     },
   ],
   chatgpt: [
     {
-      mode: 'compress',
-      format: 'image/webp',
+      tool: 'compress',
       label: 'Compress',
       variant: 'primary',
     },
   ],
 }[SITE];
 
-// Processing runs in the extension's offscreen document (via the background
-// service worker), because this page's CSP blocks extension workers. The
-// content script only fetches the bytes and hands them off.
-//
-// We send the image as an ArrayBuffer, not a Blob — chrome.runtime.sendMessage
-// does not reliably structured-clone Blob across content → background →
-// offscreen, and the Blob arrives as undefined (createImageBitmap then throws
-// "not of type Blob"). ArrayBuffer clones cleanly every hop.
-async function process(blob, action) {
+// Hand the image to the Smoosh website: stash the bytes in extension storage,
+// then ask the background to open the site in the right tool. A content script
+// on smoosh-dev.vercel.app picks the image up and drops it into the site's
+// own file handler — reusing the site's proven pipeline end to end.
+async function handoff(blob, el, action) {
   const buffer = await blob.arrayBuffer();
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(
-      {
-        type: 'smoosh-process',
-        buffer,
-        mimeType: blob.type,
-        mode: action.mode,
-        options: { format: action.format, quality: 0.9 },
-      },
-      (res) => {
-        if (chrome.runtime.lastError) {
-          resolve({ error: chrome.runtime.lastError.message });
-          return;
-        }
-        resolve(res || { error: 'no response' });
-      },
-    );
+  await chrome.storage.local.set({
+    smooshHandoff: {
+      buffer,
+      mimeType: blob.type || 'image/png',
+      name: nameFor(el, blob),
+      tool: action.tool,
+    },
   });
+  await new Promise((resolve) =>
+    chrome.runtime.sendMessage(
+      { type: 'smoosh-open-site', tool: action.tool },
+      () => resolve(),
+    ),
+  );
+}
+
+function nameFor(el, blob) {
+  const url = srcOf(el) || '';
+  const fromUrl = url.split('/').pop()?.split('?')[0];
+  const ext =
+    (blob.type.includes('png') && '.png') ||
+    (blob.type.includes('webp') && '.webp') ||
+    (blob.type.includes('jpeg') && '.jpg') ||
+    '.png';
+  if (fromUrl && /\.[a-z0-9]{2,5}$/i.test(fromUrl)) return fromUrl;
+  return `smoosh-image${ext}`;
 }
 
 /**
@@ -147,20 +149,19 @@ async function onAction(el, action, btn) {
   if (btn.dataset.busy) return;
   btn.dataset.busy = '1';
   const original = btn.textContent;
-  btn.textContent = 'Working…';
+  btn.textContent = 'Opening…';
   try {
     const blob = await fetchImage(el);
-    const result = await process(blob, action);
-    if (result.error) throw new Error(result.error);
-    btn.textContent = 'Saved ✓';
-    setTimeout(() => (btn.textContent = original), 1500);
+    await handoff(blob, el, action);
+    btn.textContent = 'Opened in Smoosh ✓';
+    setTimeout(() => (btn.textContent = original), 1800);
   } catch (err) {
     console.error('[Smoosh]', err);
     btn.textContent = 'Failed';
     setTimeout(() => (btn.textContent = original), 1800);
   } finally {
     btn.dataset.busy = '';
-    if (btn.textContent === 'Working…') btn.textContent = original;
+    if (btn.textContent === 'Opening…') btn.textContent = original;
   }
 }
 

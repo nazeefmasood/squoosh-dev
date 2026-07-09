@@ -2,14 +2,15 @@
   "manifest_version": 3,
   "name": "Smoosh — AI image cleaner",
   "version": "0.1.0",
-  "description": "Remove Gemini watermarks and compress AI-generated images right inside Gemini & ChatGPT. Runs locally — your images never leave your browser.",
-  "permissions": ["activeTab", "storage", "offscreen", "downloads"],
+  "description": "Send AI-generated images from Gemini & ChatGPT straight to Smoosh to remove watermarks or compress. Opens the Smoosh site with your image loaded.",
+  "permissions": ["activeTab", "storage", "unlimitedStorage"],
   "host_permissions": [
     "https://gemini.google.com/*",
     "https://chatgpt.com/*",
     "https://*.googleusercontent.com/*",
     "https://*.oaiusercontent.com/*",
-    "https://*.google.com/*"
+    "https://*.google.com/*",
+    "https://smoosh-dev.vercel.app/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -28,6 +29,11 @@
     {
       "matches": ["https://chatgpt.com/*"],
       "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://smoosh-dev.vercel.app/*"],
+      "js": ["site-handoff.js"],
       "run_at": "document_idle"
     }
   ],

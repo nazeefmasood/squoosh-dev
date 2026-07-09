@@ -1,32 +1,25 @@
 // Bundles the extension sources with esbuild.
 //
-// - offscreen.js: the image-processing offscreen document. It imports the
-//   vendored Gemini watermark remover (../src/vendor/gwm) and bundles it into
-//   one file, so the extension ships a single self-contained script with no
-//   module resolution at runtime. Runs in the extension's own origin to
-//   sidestep the host page's worker-src CSP.
-// - content.js / background.js / popup.js: plain ES modules, passed through.
+// The extension no longer does image processing itself — it hands images off
+// to the Smoosh website. So there's no gwm bundle; every file is a plain
+// pass-through (content scripts + background + popup).
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
 
-const root = path.resolve(__dirname, '..');
 const src = path.join(__dirname, 'src');
 const out = path.join(__dirname, 'dist');
 
 if (!fs.existsSync(out)) fs.mkdirSync(out, { recursive: true });
 
-// The gwm still-image chain is pure JS and doesn't import the optional
-// onnxruntime-web / node:* modules at all, so tree-shaking keeps them out.
-// Listed as externals only as a safety net in case something reaches them.
-const external = [
-  'onnxruntime-web',
-  'onnxruntime-web/wasm',
-  'node:fs',
-  'node:path',
-];
-
 const watch = process.argv.includes('--watch');
+
+const passThrough = [
+  'content.js',
+  'site-handoff.js',
+  'background.js',
+  'popup.js',
+];
 
 /** Copy static files into dist/ so dist/ is a directly-loadable extension. */
 function copyStatic() {
@@ -34,8 +27,7 @@ function copyStatic() {
     path.join(__dirname, 'manifest.json'),
     path.join(out, 'manifest.json'),
   );
-  // Popup + offscreen static HTML/CSS (their JS is bundled separately).
-  for (const f of ['popup.html', 'popup.css', 'offscreen.html']) {
+  for (const f of ['popup.html', 'popup.css']) {
     fs.copyFileSync(path.join(__dirname, 'src', f), path.join(out, f));
   }
   const iconsOut = path.join(out, 'icons');
@@ -45,32 +37,18 @@ function copyStatic() {
   }
 }
 
-/** Files that only need to be passed through (not bundled off a gwm import). */
-const passThrough = ['content.js', 'background.js', 'popup.js'];
-
 async function build() {
-  const ctxOptions = (entry, outfile, extra = {}) => ({
+  const opts = (entry) => ({
     entryPoints: [path.join(src, entry)],
     bundle: true,
-    outfile: path.join(out, outfile),
+    outfile: path.join(out, entry),
     format: 'iife',
     target: ['chrome115', 'firefox115'],
     platform: 'browser',
-    external,
     logLevel: 'info',
-    ...extra,
   });
 
-  const builds = [
-    // Offscreen document script: bundled, imports gwm from the host repo.
-    {
-      ...ctxOptions('offscreen.js', 'offscreen.js', { format: 'esm' }),
-      alias: { gwm: path.join(root, 'src/vendor/gwm/sdk/image-data.js') },
-    },
-  ];
-  for (const f of passThrough) {
-    builds.push(ctxOptions(f, f));
-  }
+  const builds = passThrough.map((f) => opts(f));
 
   if (watch) {
     copyStatic();

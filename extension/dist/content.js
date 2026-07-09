@@ -9,47 +9,51 @@
   var ACTIONS = {
     gemini: [
       {
-        mode: 'watermark',
-        format: 'image/png',
+        tool: 'watermark',
         label: 'Remove watermark',
         variant: 'primary',
       },
       {
-        mode: 'compress',
-        format: 'image/webp',
+        tool: 'compress',
         label: 'Compress',
         variant: 'ghost',
       },
     ],
     chatgpt: [
       {
-        mode: 'compress',
-        format: 'image/webp',
+        tool: 'compress',
         label: 'Compress',
         variant: 'primary',
       },
     ],
   }[SITE];
-  async function process(blob, action) {
+  async function handoff(blob, el, action) {
     const buffer = await blob.arrayBuffer();
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage(
-        {
-          type: 'smoosh-process',
-          buffer,
-          mimeType: blob.type,
-          mode: action.mode,
-          options: { format: action.format, quality: 0.9 },
-        },
-        (res) => {
-          if (chrome.runtime.lastError) {
-            resolve({ error: chrome.runtime.lastError.message });
-            return;
-          }
-          resolve(res || { error: 'no response' });
-        },
-      );
+    await chrome.storage.local.set({
+      smooshHandoff: {
+        buffer,
+        mimeType: blob.type || 'image/png',
+        name: nameFor(el, blob),
+        tool: action.tool,
+      },
     });
+    await new Promise((resolve) =>
+      chrome.runtime.sendMessage(
+        { type: 'smoosh-open-site', tool: action.tool },
+        () => resolve(),
+      ),
+    );
+  }
+  function nameFor(el, blob) {
+    const url = srcOf(el) || '';
+    const fromUrl = url.split('/').pop()?.split('?')[0];
+    const ext =
+      (blob.type.includes('png') && '.png') ||
+      (blob.type.includes('webp') && '.webp') ||
+      (blob.type.includes('jpeg') && '.jpg') ||
+      '.png';
+    if (fromUrl && /\.[a-z0-9]{2,5}$/i.test(fromUrl)) return fromUrl;
+    return `smoosh-image${ext}`;
   }
   var MIN = 140;
   function isCandidate(el) {
@@ -120,20 +124,19 @@
     if (btn.dataset.busy) return;
     btn.dataset.busy = '1';
     const original = btn.textContent;
-    btn.textContent = 'Working\u2026';
+    btn.textContent = 'Opening\u2026';
     try {
       const blob = await fetchImage(el);
-      const result = await process(blob, action);
-      if (result.error) throw new Error(result.error);
-      btn.textContent = 'Saved \u2713';
-      setTimeout(() => (btn.textContent = original), 1500);
+      await handoff(blob, el, action);
+      btn.textContent = 'Opened in Smoosh \u2713';
+      setTimeout(() => (btn.textContent = original), 1800);
     } catch (err) {
       console.error('[Smoosh]', err);
       btn.textContent = 'Failed';
       setTimeout(() => (btn.textContent = original), 1800);
     } finally {
       btn.dataset.busy = '';
-      if (btn.textContent === 'Working\u2026') btn.textContent = original;
+      if (btn.textContent === 'Opening\u2026') btn.textContent = original;
     }
   }
   async function fetchImage(el) {
