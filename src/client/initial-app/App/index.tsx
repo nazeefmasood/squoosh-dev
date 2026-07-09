@@ -118,12 +118,16 @@ export default class App extends Component<Props, State> {
   private handleFiles = (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'));
     if (!imgs.length) return;
-    this.openEditor();
+    // Keep the active tool in the URL so a reload lands on the same tool.
+    this.openEditor(this.state.activeTool);
     this.setState({ files: imgs });
   };
 
   private setActiveTool = (tool: ToolMode) => {
-    this.setState({ activeTool: tool });
+    if (tool === this.state.activeTool) return;
+    // Files are per-tool: an image loaded in one tool shouldn't follow the
+    // user into the others.
+    this.setState({ activeTool: tool, files: [] });
   };
 
   private showSnack = (
@@ -145,7 +149,11 @@ export default class App extends Component<Props, State> {
     if (tool) url.searchParams.set('tool', tool);
     else url.searchParams.delete('tool');
     history.pushState(null, '', url.href);
-    this.setState({ isEditorOpen: true });
+    if (tool && tool !== this.state.activeTool) {
+      this.setState({ isEditorOpen: true, activeTool: tool, files: [] });
+    } else {
+      this.setState({ isEditorOpen: true });
+    }
   };
 
   // Used by the editor's back button / nav links.
@@ -189,6 +197,7 @@ export default class App extends Component<Props, State> {
             ) : isFavicon ? (
               Favicon && (
                 <Favicon
+                  files={files}
                   onModeChange={this.setActiveTool}
                   onBack={this.goHome}
                   showSnack={this.showSnack}

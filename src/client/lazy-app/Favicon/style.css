@@ -173,8 +173,8 @@
 }
 
 .previewStage {
-  width: 200px;
-  height: 200px;
+  width: 320px;
+  height: 320px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -189,10 +189,12 @@
   background-position: 0 0, 0 10px, 10px -10px, -10px 0;
 }
 
+/* Sized by JS at devicePixelRatio resolution; pixelated rendering here made
+ * the smooth downscaled preview look jagged on non-integer scales. */
 .preview {
-  width: 128px;
-  height: 128px;
-  image-rendering: pixelated;
+  display: block;
+  width: 256px;
+  height: 256px;
 }
 
 .sizeRow {
@@ -205,8 +207,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
 }
 
 .sizeTile canvas {

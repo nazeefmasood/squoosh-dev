@@ -228,16 +228,44 @@ export default class Tool extends Component<Props, State> {
   private abortController?: AbortController;
   private fileInput?: HTMLInputElement;
 
+  // Result files being handed over to another mode (e.g. watermark → compress),
+  // consumed on the mode switch instead of clearing to empty.
+  private pendingHandoff?: File[];
+
   componentDidUpdate(prevProps: Props) {
-    // Clearing results when the tool mode switches keeps the UI consistent.
-    if (prevProps.mode !== this.props.mode && this.state.items.length) {
-      for (const it of this.state.items)
+    // Each tool starts fresh: images and results loaded in one tool must not
+    // carry over (with stale download links) when the mode switches — unless
+    // the user explicitly sent results onward via a handoff.
+    if (prevProps.mode !== this.props.mode) {
+      const handoff = this.pendingHandoff;
+      this.pendingHandoff = undefined;
+      if (!this.state.items.length && !handoff) return;
+      this.abortController?.abort();
+      for (const it of this.state.items) {
+        URL.revokeObjectURL(it.previewUrl);
         for (const r of it.results) if (r.url) URL.revokeObjectURL(r.url);
-      this.setState((prev) => ({
-        items: prev.items.map((i) => ({ ...i, results: [] })),
-      }));
+      }
+      this.setState({
+        items: (handoff ?? []).map(newItem),
+        processing: false,
+        processedCount: 0,
+      });
     }
   }
+
+  /** Send the cleaned watermark results straight into the compress tool. */
+  private sendResultsToCompress = () => {
+    const files: File[] = [];
+    for (const item of this.state.items)
+      for (const r of item.results)
+        if (r.status === 'done' && r.file) files.push(r.file);
+    if (!files.length) return;
+    this.pendingHandoff = files;
+    this.props.onModeChange('compress');
+    this.props.showSnack(
+      `Moved ${files.length} image${files.length === 1 ? '' : 's'} to Compress`,
+    );
+  };
 
   componentWillUnmount() {
     this.abortController?.abort();
@@ -749,6 +777,15 @@ export default class Tool extends Component<Props, State> {
                       </span>
                     )}
                   </div>
+                  {(isWatermark || isMetadata) && (
+                    <button
+                      class={style.btnGhost}
+                      onClick={this.sendResultsToCompress}
+                      title="Open the results in the compress tool"
+                    >
+                      Compress result{doneCount === 1 ? '' : 's'} →
+                    </button>
+                  )}
                   <button class={style.btnPrimary} onClick={this.downloadAll}>
                     Download all ({doneCount})
                   </button>

@@ -1,0 +1,16 @@
+{
+  // Vercel's Node builder compiles api/*.ts with the nearest tsconfig. The
+  // repo-wide config uses "module": "esnext" (Rollup app build), which makes
+  // the emitted function .js keep `import` statements — and the Lambda runs
+  // them as CommonJS, crashing every invocation with
+  // "Cannot use import statement outside a module".
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["./**/*.ts"]
+}
